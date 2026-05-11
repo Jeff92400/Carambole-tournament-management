@@ -90,17 +90,41 @@ function computePouleConfiguration(numPlayers, allowPouleOf2 = false) {
 
 /**
  * Get poule configuration for a player count, respecting org settings.
- * Async wrapper that reads the org's allow_poule_of_2 setting.
+ * Async wrapper that reads the org's allow_poule_of_2 and single_poule_threshold settings.
+ *
+ * V 2.0.747 — When numPlayers < single_poule_threshold, a single poule is forced
+ * regardless of allow_poule_of_2 (e.g. 5 players → [5], not [3, 2]).
+ *
  * @param {number} numPlayers
  * @param {number|null} orgId
  * @returns {Promise<{ poules: number[], tables: number, minPlayers: number, description: string }>}
  */
 async function getPouleConfigForOrg(numPlayers, orgId) {
   const appSettings = require('./app-settings');
-  const raw = orgId
-    ? await appSettings.getOrgSetting(orgId, 'allow_poule_of_2')
-    : await appSettings.getSetting('allow_poule_of_2');
-  const allowPouleOf2 = raw === 'true';
+
+  const [rawAllow, rawThreshold] = await Promise.all([
+    orgId
+      ? appSettings.getOrgSetting(orgId, 'allow_poule_of_2')
+      : appSettings.getSetting('allow_poule_of_2'),
+    orgId
+      ? appSettings.getOrgSetting(orgId, 'single_poule_threshold')
+      : appSettings.getSetting('single_poule_threshold')
+  ]);
+
+  const allowPouleOf2 = rawAllow === 'true';
+  const singlePouleThreshold = parseInt(rawThreshold) || 6;
+
+  // Force a single poule when below the threshold — overrides allow_poule_of_2
+  if (numPlayers > 0 && numPlayers < singlePouleThreshold) {
+    const poules = [numPlayers];
+    return {
+      poules,
+      tables: computeTablesNeeded(poules),
+      minPlayers: allowPouleOf2 ? 2 : 3,
+      description: formatPouleDescription(poules)
+    };
+  }
+
   return computePouleConfiguration(numPlayers, allowPouleOf2);
 }
 
