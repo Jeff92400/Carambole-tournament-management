@@ -2772,6 +2772,10 @@ async function initializeDatabase() {
     // tables numbered 6-9 instead of 1-4, etc.). Stored as a JSON array of
     // integers, e.g. '[6,7,8,9]'. NULL or empty => fall back to [1..table_count].
     await client.query(`ALTER TABLE ddj_session ADD COLUMN IF NOT EXISTS table_numbers TEXT`);
+    // V 2.0.746 — Track when poules were last validated by the DdJ so étape 3
+    // can warn if the composition was saved before today (stale after last-minute
+    // forfaits that weren't reflected in a poule regeneration).
+    await client.query(`ALTER TABLE ddj_session ADD COLUMN IF NOT EXISTS poules_saved_at TIMESTAMP`);
 
     // Tracking columns on the 3 ddj match tables (idempotent).
     // started_at = match physically begun on a billiard table.

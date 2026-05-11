@@ -840,6 +840,19 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
       }
     }
 
+    // V 2.0.746 — Stamp poules_saved_at so étape 3 can warn if the composition
+    // is stale (validated before today, suggesting last-minute forfaits were not
+    // reflected in a poule regeneration).
+    try {
+      await new Promise((resolve) => {
+        db.run(
+          `UPDATE ddj_session SET poules_saved_at = NOW() WHERE tournoi_id = $1`,
+          [tournoiId],
+          () => resolve()
+        );
+      });
+    } catch (e) { /* non-fatal */ }
+
     // Activity log for audit
     try {
       await new Promise((resolve) => {
@@ -1245,7 +1258,18 @@ async function loadPouleMatches(db, orgId, tournoiId) {
     ? 'single_poule'
     : 'bracket';
 
-  return { tournament, poules, settings, game_params: gameParams, mode };
+  // V 2.0.746 — Expose when poules were last saved so étape 3 can warn
+  // if the composition predates today (stale after last-minute forfaits).
+  const sessionRow = await new Promise((resolve) => {
+    db.get(
+      `SELECT poules_saved_at FROM ddj_session WHERE tournoi_id = $1`,
+      [tournoiId],
+      (err, row) => resolve(err ? null : row)
+    );
+  });
+  const poulesSavedAt = sessionRow ? sessionRow.poules_saved_at : null;
+
+  return { tournament, poules, settings, game_params: gameParams, mode, poules_saved_at: poulesSavedAt };
 }
 
 // GET /api/directeur-jeu/competitions/:id/poule-matches

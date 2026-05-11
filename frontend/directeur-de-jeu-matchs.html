@@ -392,6 +392,28 @@
     .ddj-save-status.visible { opacity: 1; transform: translate(-50%, 0); }
     .ddj-save-status.error   { background: rgba(220,53,69,0.97); box-shadow: 0 8px 24px rgba(220,53,69,0.4); }
     .ddj-save-status.warning { background: rgba(255,193,7,0.98); color: #222; box-shadow: 0 8px 24px rgba(255,193,7,0.4); }
+
+    /* V 2.0.746 — Stale-poules warning banner */
+    #stalePoulesBanner {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-left: 5px solid #f0a500;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      font-size: 0.92em;
+      color: #664d03;
+    }
+    #stalePoulesBanner .stale-icon { font-size: 1.4em; flex-shrink: 0; }
+    #stalePoulesBanner a {
+      color: #664d03;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -426,6 +448,17 @@
       <div class="dot"></div>
       <div class="dot"></div>
       <div class="dot"></div>
+    </div>
+
+    <!-- V 2.0.746 — Stale-poules warning: shown when poules were saved before today -->
+    <div id="stalePoulesBanner">
+      <span class="stale-icon">⚠️</span>
+      <div>
+        <strong>Les poules ont été générées avant aujourd'hui</strong> (le <span class="stale-date"></span>).
+        Si des joueurs se sont désistés ce matin, pensez à retourner à
+        <a id="stalePoulesLink">l'étape 2 pour régénérer les poules</a>
+        avant de saisir les scores.
+      </div>
     </div>
 
     <div id="mainContent">
@@ -466,6 +499,13 @@
       e.preventDefault();
       window.location.href = 'directeur-de-jeu-poules.html?compId=' + compId;
     });
+    // Wire the stale-poules banner link now that compId is known
+    const stalePoulesLink = document.getElementById('stalePoulesLink');
+    if (stalePoulesLink) {
+      stalePoulesLink.addEventListener('click', () => {
+        window.location.href = 'directeur-de-jeu-poules.html?compId=' + compId;
+      });
+    }
     const navBtn = document.getElementById('logoutBtn');
     if (userRole === 'directeur_jeu') {
       navBtn.addEventListener('click', (e) => {
@@ -520,9 +560,28 @@
       tournament: null,
       poules: [],
       gameParams: { distance: null, distance_reduite: null, reprises: null, moyenne_mini: null, moyenne_maxi: null },
-      activeTab: 1, // poule number currently displayed
-      mode: 'bracket' // V 2.0.745 — 'single_poule' | 'bracket', loaded from API
+      activeTab: 1,        // poule number currently displayed
+      mode: 'bracket',     // V 2.0.745 — 'single_poule' | 'bracket', loaded from API
+      poulesSavedAt: null  // V 2.0.746 — timestamp of last poule validation
     };
+
+    // V 2.0.746 — Show a warning banner if poules were validated before today
+    // (Paris time), which means last-minute forfaits may not be reflected.
+    function checkStalePoules(savedAt) {
+      const banner = document.getElementById('stalePoulesBanner');
+      if (!banner) return;
+      if (!savedAt) { banner.style.display = 'none'; return; }
+      const saved = new Date(savedAt);
+      const savedDay = saved.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+      const today   = new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+      if (savedDay !== today) {
+        banner.style.display = 'flex';
+        banner.querySelector('.stale-date').textContent =
+          saved.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      } else {
+        banner.style.display = 'none';
+      }
+    }
 
     async function loadAll() {
       try {
@@ -535,13 +594,15 @@
         state.tournament = data.tournament;
         state.poules = data.poules;
         state.gameParams = data.game_params || state.gameParams;
-        state.mode = data.mode || 'bracket'; // V 2.0.745
+        state.mode = data.mode || 'bracket';           // V 2.0.745
+        state.poulesSavedAt = data.poules_saved_at || null; // V 2.0.746
         // Default to first poule if activeTab isn't valid
         if (!state.poules.find(p => p.number === state.activeTab)) {
           state.activeTab = state.poules[0]?.number || 1;
         }
         // Inform the step navigator so it can grey steps 4 & 5 if needed
         if (typeof window.ddjSetMode === 'function') window.ddjSetMode(state.mode);
+        checkStalePoules(state.poulesSavedAt); // V 2.0.746
         render();
       } catch (err) {
         console.error('[Matchs] load error:', err);
