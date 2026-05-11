@@ -284,6 +284,34 @@
     .btn-start-match:hover { filter: brightness(1.08); transform: translateY(-1px); }
     .btn-start-match:disabled { opacity: 0.6; cursor: progress; }
 
+    /* V 2.0.750 — Cancel start button */
+    .btn-cancel-match {
+      padding: 4px 12px;
+      border: 1px solid #c0392b;
+      border-radius: 6px;
+      background: transparent;
+      color: #c0392b;
+      font-size: 0.78em;
+      font-weight: 600;
+      cursor: pointer;
+      margin-left: 10px;
+      transition: all 0.15s;
+    }
+    .btn-cancel-match:hover {
+      background: #c0392b;
+      color: white;
+    }
+    .btn-cancel-match.confirm-pending {
+      background: #c0392b;
+      color: white;
+      animation: pulse-cancel 0.4s ease;
+    }
+    @keyframes pulse-cancel {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.06); }
+      100% { transform: scale(1); }
+    }
+
     /* Classement */
     .classement-card {
       border: 2px solid #dee2e6;
@@ -785,6 +813,52 @@
         });
       });
 
+      // V 2.0.750 — Wire "Annuler le démarrage" buttons.
+      // Two-step confirmation: first click → "Confirmer ?" + 4s timeout to reset;
+      // second click within 4s → cancels, reloads.
+      document.querySelectorAll('.btn-cancel-match').forEach(btn => {
+        let confirmTimeout = null;
+        btn.addEventListener('click', async () => {
+          if (!btn.classList.contains('confirm-pending')) {
+            // First click — ask for confirmation
+            btn.classList.add('confirm-pending');
+            btn.textContent = 'Confirmer l\'annulation ?';
+            confirmTimeout = setTimeout(() => {
+              btn.classList.remove('confirm-pending');
+              btn.textContent = '✕ Annuler le démarrage';
+            }, 4000);
+            return;
+          }
+          // Second click — confirmed
+          clearTimeout(confirmTimeout);
+          btn.disabled = true;
+          btn.textContent = '…';
+          const pn = parseInt(btn.dataset.poule, 10);
+          const mn = parseInt(btn.dataset.match, 10);
+          try {
+            const ok = typeof DjV3 !== 'undefined' && DjV3.cancelMatch
+              ? await DjV3.cancelMatch({ poule_number: pn, match_number: mn })
+              : false;
+            if (ok) {
+              await loadAll();
+              if (typeof DjV3 !== 'undefined' && DjV3.guideMessage) {
+                DjV3.guideMessage('Match remis à « À jouer ». Table libérée.', 'info');
+              }
+            } else {
+              btn.disabled = false;
+              btn.classList.remove('confirm-pending');
+              btn.textContent = '✕ Annuler le démarrage';
+              alert('Impossible d\'annuler — le match a peut-être déjà des scores.');
+            }
+          } catch (e) {
+            console.error('cancel match failed', e);
+            btn.disabled = false;
+            btn.classList.remove('confirm-pending');
+            btn.textContent = '✕ Annuler le démarrage';
+          }
+        });
+      });
+
       // V 2.0.692 — DdJ V3 : wire referee autocomplete on every match card
       // (each match has its own referee). The DjV3 helper handles the
       // network call + filling both name + licence fields.
@@ -978,7 +1052,13 @@
       const startZone = isFinished
         ? ''
         : (isStarted
-            ? `<div class="match-start-zone in-progress">⏳ <strong>En cours</strong> depuis ${startTime}</div>`
+            ? `<div class="match-start-zone in-progress">
+                 ⏳ <strong>En cours</strong> depuis ${startTime}
+                 <button type="button" class="btn-cancel-match"
+                   data-poule="${pouleNumber}" data-match="${m.match_number}">
+                   ✕ Annuler le démarrage
+                 </button>
+               </div>`
             : `<div class="match-start-zone">
                  <button type="button" class="btn-start-match" data-poule="${pouleNumber}" data-match="${m.match_number}">
                    ▶ Match commencé

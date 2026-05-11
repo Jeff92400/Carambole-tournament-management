@@ -1077,6 +1077,24 @@
     } catch (e) { console.error('startMatch', e); }
   }
 
+  // V 2.0.750 — Cancel a started-but-unfinished poule match (reset → "À jouer").
+  // Clears started_at on the backend; table status updates automatically on next poll.
+  async function cancelMatch(args) {
+    // args: { poule_number, match_number }
+    try {
+      const r = await authFetch(
+        `/api/directeur-jeu/competitions/${state.tournoiId}/poule-matches/cancel`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args || {})
+        }
+      );
+      if (r.ok) await loadTablesStatus();
+      return r.ok;
+    } catch (e) { console.error('cancelMatch', e); return false; }
+  }
+
   // -------------------------------------------------------------------------
   // Network helpers
   // -------------------------------------------------------------------------
@@ -1170,6 +1188,7 @@
     guideMessage,
     refereeAutocomplete,
     startMatch,
+    cancelMatch,
     get session() { return state.session; },
     get tables() { return state.tables; }
   };

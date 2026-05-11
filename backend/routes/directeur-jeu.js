@@ -4411,6 +4411,49 @@ router.post('/competitions/:id/poule-matches/start', authenticateToken, requireD
   }
 });
 
+// POST /api/directeur-jeu/competitions/:id/poule-matches/cancel
+// Resets a started-but-unfinished poule match back to "À jouer" (clears started_at).
+// Safe: only acts when scores have not been entered yet.
+router.post('/competitions/:id/poule-matches/cancel', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+
+  const b = req.body || {};
+  const pn = parseInt(b.poule_number, 10);
+  const mn = parseInt(b.match_number, 10);
+  if (!Number.isFinite(pn) || !Number.isFinite(mn)) {
+    return res.status(400).json({ error: 'poule_number et match_number requis' });
+  }
+
+  try {
+    // Only cancel if the match is started but NOT finished (no scores)
+    const result = await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE ddj_poule_matches
+         SET started_at = NULL
+         WHERE tournoi_id = $1
+           AND poule_number = $2
+           AND match_number = $3
+           AND started_at IS NOT NULL
+           AND (p1_points IS NULL AND p2_points IS NULL)`,
+        [tournoiId, pn, mn],
+        function (err) { err ? reject(err) : resolve(this); }
+      );
+    });
+    if (result.changes === 0) {
+      return res.status(400).json({
+        error: 'Match introuvable, non démarré, ou déjà avec des scores'
+      });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DdJ poule-matches/cancel] error:', err);
+    res.status(500).json({ error: 'Erreur lors de l\'annulation du démarrage' });
+  }
+});
+
 router.post('/competitions/:id/bracket/start', authenticateToken, requireDdJ, async (req, res) => {
   const db = getDb();
   const orgId = req.user.organizationId || null;
