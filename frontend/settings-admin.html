@@ -2194,7 +2194,7 @@
               </div>
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-              <a id="reglementDocViewLink" href="#" target="_blank" class="btn" style="padding: 8px 16px; font-size: 13px; background: #1F4788; text-decoration: none;">
+              <a id="reglementDocViewLink" href="#" onclick="viewReglementDoc(); return false;" class="btn" style="padding: 8px 16px; font-size: 13px; background: #1F4788; text-decoration: none; cursor: pointer;">
                 📄 Consulter
               </a>
               <button onclick="deleteReglementDoc()" class="btn btn-danger" style="padding: 8px 16px; font-size: 13px;">
@@ -5711,7 +5711,7 @@
           document.getElementById('reglementDocUploadedBy').textContent = data.uploaded_by || '—';
           const d = data.uploaded_at ? new Date(data.uploaded_at).toLocaleDateString('fr-FR') : '—';
           document.getElementById('reglementDocDate').textContent = d;
-          document.getElementById('reglementDocViewLink').href = `${API_URL}/settings/org-document/reglement_ffb`;
+          // href set via viewReglementDoc() to send auth token (direct URL would return 401)
           if (infoDiv) infoDiv.style.display = 'block';
           if (noDocDiv) noDocDiv.style.display = 'none';
         } else {
@@ -5721,6 +5721,20 @@
         updateAccordionSummaries();
       } catch (e) {
         console.error('loadReglementDocInfo:', e);
+      }
+    }
+
+    async function viewReglementDoc() {
+      try {
+        const r = await authFetch(`${API_URL}/settings/org-document/reglement_ffb`);
+        if (!r.ok) { alert('Impossible de charger le document.'); return; }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (e) {
+        console.error('viewReglementDoc:', e);
+        alert('Erreur lors du chargement du document.');
       }
     }
 
