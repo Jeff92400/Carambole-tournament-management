@@ -1,7 +1,12 @@
 # Guide Utilisateur Complet
 
 > **Note:** Ce document est généré automatiquement depuis le guide HTML.
-> **Dernière mise à jour:** 26/05/2026
+> **Dernière mise à jour:** 14/05/2026
+>
+> **Mise à jour V 2.0.765 — Barème & Bonus sur mesure :**
+> - Nouveau champ de condition **"Rang dans la poule"** (POULE_RANK) pour récompenser le vainqueur de chaque poule indépendamment du classement global.
+> - Après toute modification d'une règle de barème, une fenêtre propose un **recalcul rétroactif** (toute la saison, depuis une date précise, ou futurs imports uniquement).
+> - Les bonus configurés apparaissent comme **colonnes distinctes** dans les résultats avec l'en-tête personnalisé saisi lors de la création du bloc.
 >
 > **Mise à jour V 2.0.738 — Mode Hybride WordPress + App Joueur :**
 > - Nouveau mode de diffusion des news **« 🔵 Hybride — WordPress + App Joueur »** documenté dans la section *Paramètres &gt; Site Web / WordPress &gt; Mode Hybride*.

@@ -4460,16 +4460,36 @@
 
     <p><strong>Chaque condition dans un bloc :</strong></p>
     <ul>
-      <li><strong>Champ</strong> : Moyenne du joueur, Nombre de joueurs, Points de match, Série</li>
+      <li><strong>Champ</strong> : Moyenne du joueur, Nombre de joueurs, Points de match, Série, Position finale, <strong>Rang dans la poule</strong></li>
       <li><strong>Opérateur</strong> : >, >=, <, <=, =</li>
       <li><strong>Valeur</strong> : Seuil max catégorie, Seuil min catégorie, ou valeur numérique</li>
       <li><strong>Logique</strong> : Possibilité de combiner 2 conditions avec ET/OU</li>
       <li><strong>Points</strong> : Nombre de points bonus attribués</li>
     </ul>
 
+    <h4>Champ "Rang dans la poule" (POULE_RANK)</h4>
+    <p>Ce champ permet de récompenser le classement d'un joueur <em>au sein de sa poule</em>, indépendamment de la position globale dans le tournoi. Exemple : <strong>Rang dans la poule = 1 → +1 point</strong> (bonus vainqueur de poule).</p>
+    <div class="info-box">
+      <strong>Prérequis :</strong> les convocations doivent avoir été envoyées avant l'import des résultats. Le rang est calculé automatiquement depuis les données de poule (points de match décroissants, moyenne en cas d'égalité). Si aucune convocation n'a été envoyée pour le tournoi concerné, le champ vaut 0 et la condition ne s'applique pas.
+    </div>
+
+    <h4>Colonnes de bonus dans les résultats</h4>
+    <p>Chaque bloc de bonus actif qui génère des points apparaît comme une <strong>colonne distincte</strong> dans la page de résultats du tournoi, avec le libellé saisi dans le champ <em>"En-tête colonne"</em> lors de la création du bloc. Une colonne <strong>Total bonus</strong> est ajoutée automatiquement lorsqu'il y a au moins un bonus.</p>
+    <div class="info-box">
+      <strong>Conseil :</strong> choisissez un libellé court pour l'en-tête colonne (ex : "Bonus VP" pour "Bonus Vainqueur de Poule") — il apparaîtra directement dans le tableau des résultats.
+    </div>
+
+    <h4>Recalcul rétroactif après modification</h4>
+    <p>Lorsque vous modifiez une valeur du barème (Victoire/Match nul/Défaite) ou une condition de bonus personnalisé, une fenêtre vous propose de recalculer les résultats historiques :</p>
+    <ul>
+      <li><strong>Non — prochains imports seulement</strong> (défaut) : la modification s'applique uniquement aux prochains imports de résultats. Les données déjà enregistrées restent inchangées.</li>
+      <li><strong>Oui — toute la saison en cours</strong> : recalcule les bonus et les classements pour tous les tournois de la saison en cours.</li>
+      <li><strong>Oui — depuis une date précise</strong> : recalcule uniquement les tournois dont la date est égale ou postérieure à la date choisie.</li>
+    </ul>
+
     <p><strong>Actions :</strong></p>
     <ul>
-      <li>Ajouter un nouveau bloc de conditions</li>
+      <li>Créer un nouveau type de bonus (section en bas du panneau, séparée des blocs existants)</li>
       <li>Modifier/supprimer des conditions individuelles</li>
       <li>Activer/désactiver un bloc entier</li>
       <li>Supprimer un bloc complet</li>
@@ -4937,13 +4957,15 @@
     <h3>Configurer le barème de points de match</h3>
     <ol class="steps">
       <li>Menu Paramètres > onglet Compétitions > panneau "Barème des points de match"</li>
-      <li>Section "Barème de base" : ajuster les points pour Victoire, Match nul, Défaite (par défaut : 2/1/0)</li>
-      <li>Section "Blocs de bonus" : les bonus configurés sont affichés (Bonus Moyenne, etc.)</li>
-      <li>Cliquer sur "Modifier" pour ajuster les points d'une condition de bonus</li>
-      <li>(Optionnel) Ajouter un bloc de bonus : saisir un nom de bloc et un libellé de colonne, cliquer sur "Ajouter le bloc"</li>
-      <li>Ajouter des conditions avec le formulaire structuré (champ, opérateur, valeur)</li>
+      <li>Section "Barème de base" : cliquer sur "Modifier" en face de Victoire, Match nul ou Défaite pour ajuster les points (défaut : 2/1/0)</li>
+      <li>Section "Bonus sur mesure" : les blocs de bonus configurés sont listés</li>
+      <li>Cliquer sur "Modifier" pour ajuster une condition existante</li>
+      <li>(Optionnel) Créer un nouveau type de bonus : dans la section séparée en bas du panneau (après le séparateur en pointillés), saisir un <em>nom de bonus</em> et un <em>en-tête de colonne</em>, puis cliquer sur "Créer ce bonus"</li>
+      <li>Dans le formulaire qui s'ouvre, définir la condition (champ, opérateur, valeur) et les points attribués</li>
+      <li>Pour les bonus "Rang dans la poule" : s'assurer que les convocations ont été envoyées avant d'importer les résultats du tournoi concerné</li>
       <li>Activer ou désactiver les blocs selon les besoins</li>
-      <li>Les points de match et bonus sont appliqués automatiquement lors de l'import des résultats</li>
+      <li>Après toute modification, une fenêtre propose de recalculer les résultats historiques (tous les tournois, depuis une date, ou uniquement les futurs imports)</li>
+      <li>Les points de match et bonus sont appliqués automatiquement à chaque import de résultats</li>
     </ol>
   </section>
 
