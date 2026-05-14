@@ -6062,6 +6062,13 @@
       'BASE_VDL': 'Barème de base (Victoire / Nul / Défaite)',
       'MOYENNE_BONUS': 'Bonus Moyenne'
     };
+    // Fixed rows for the VDL (Victoire/Nul/Défaite) barème
+    const VDL_ROWS = [
+      { key: 'VICTORY', label: 'Victoire',  defaultPoints: 2 },
+      { key: 'DRAW',    label: 'Match nul', defaultPoints: 1 },
+      { key: 'LOSS',    label: 'Défaite',   defaultPoints: 0 },
+    ];
+    let _vdlEditState = {};
 
     function formatBaremeBlockLabel(ruleType) {
       if (BAREME_BLOCK_LABELS[ruleType]) return BAREME_BLOCK_LABELS[ruleType];
@@ -6137,22 +6144,45 @@
 
     function renderScoringBlocks(rules) {
       const container = document.getElementById('scoringRuleBlocks');
-
-      // Only show BASE_VDL (match points) in this section
       const baseRules = rules.filter(r => r.rule_type === 'BASE_VDL');
+      const rulesMap = {};
+      for (const r of baseRules) rulesMap[r.condition_key] = r;
 
-      if (baseRules.length === 0) {
-        container.innerHTML = `
-          <div style="text-align: center; padding: 20px; color: #666;">
-            Aucun barème configuré
-            <div style="margin-top: 12px;">
-              <button class="btn-add-sm" onclick="openCreateScoringModal('BASE_VDL')">+ Ajouter une condition</button>
-            </div>
-          </div>`;
-        return;
-      }
+      const rows = VDL_ROWS.map(vdl => {
+        const rule = rulesMap[vdl.key];
+        const pts = rule ? rule.points : vdl.defaultPoints;
+        const ptsStyle = pts > 0 ? 'color: #28a745; font-weight: bold;' : 'font-weight: bold;';
+        return `
+          <tr style="border-bottom: 1px solid #f0f0f0;">
+            <td style="padding: 14px 16px; font-size: 14px;">${vdl.label}</td>
+            <td style="padding: 14px 16px; text-align: center; font-size: 15px; ${ptsStyle}">${pts}</td>
+            <td style="padding: 14px 16px; text-align: center;">
+              <button class="btn" style="background: var(--color-primary, #1F4788); color: white; padding: 6px 18px; border-radius: 6px; font-weight: 600; font-size: 13px;"
+                onclick="openVDLEditModal('${vdl.key}', '${vdl.label}', ${pts}, ${rule ? rule.id : 'null'})">
+                Modifier
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
 
-      renderBlocksHTML(container, ['BASE_VDL'], rules, false);
+      container.innerHTML = `
+        <div class="scoring-block">
+          <div class="scoring-block-header">
+            <h4>Barème de base (Victoire / Nul / Défaite)</h4>
+          </div>
+          <div class="scoring-block-body" style="padding: 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background: #f0f4f8;">
+                  <th style="padding: 10px 16px; text-align: left; font-weight: 600; font-size: 13px; color: #555;">Condition</th>
+                  <th style="padding: 10px 16px; text-align: center; font-weight: 600; font-size: 13px; color: #555; width: 100px;">Points</th>
+                  <th style="padding: 10px 16px; text-align: center; font-weight: 600; font-size: 13px; color: #555; width: 160px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
     }
 
     function renderCustomBonusBlocks(rules) {
@@ -6234,6 +6264,54 @@
 
     function openScoringModal() { document.getElementById('editScoringRuleModal').style.display = 'flex'; }
     function closeScoringModal() { document.getElementById('editScoringRuleModal').style.display = 'none'; }
+
+    function openVDLEditModal(conditionKey, label, currentPoints, ruleId) {
+      _vdlEditState = { conditionKey, label, ruleId };
+      document.getElementById('vdlModalLabel').textContent = label;
+      document.getElementById('vdlModalPoints').value = currentPoints;
+      document.getElementById('vdlModalOverlay').style.display = 'flex';
+      document.getElementById('vdlModalPoints').focus();
+    }
+    function closeVDLModal() {
+      document.getElementById('vdlModalOverlay').style.display = 'none';
+    }
+    async function saveVDLRule() {
+      const pts = parseInt(document.getElementById('vdlModalPoints').value);
+      if (isNaN(pts) || pts < 0) { showMessage('error', 'Valeur invalide — entrez un nombre ≥ 0'); return; }
+      const { conditionKey, label, ruleId } = _vdlEditState;
+      try {
+        let response;
+        if (ruleId) {
+          response = await authFetch(`${API_URL}/reference-data/scoring-rules/${ruleId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ points: pts })
+          });
+        } else {
+          response = await authFetch(`${API_URL}/reference-data/scoring-rules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rule_type: 'BASE_VDL',
+              condition_key: conditionKey,
+              description: label,
+              points: pts,
+              display_order: VDL_ROWS.findIndex(r => r.key === conditionKey) + 1
+            })
+          });
+        }
+        if (response.ok) {
+          closeVDLModal();
+          loadScoringRules();
+          showMessage('success', 'Barème mis à jour');
+        } else {
+          const data = await response.json();
+          showMessage('error', data.error || 'Erreur');
+        }
+      } catch (e) {
+        showMessage('error', 'Erreur de connexion');
+      }
+    }
 
     function populateScoringDropdowns() {
       ['editField1', 'editField2'].forEach(id => {
@@ -7252,6 +7330,26 @@
       </div>
     </div>
   </div>
+  <!-- VDL (Victoire / Nul / Défaite) simple edit modal -->
+  <div id="vdlModalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1100; align-items: center; justify-content: center;" onclick="if(event.target===this) closeVDLModal()">
+    <div style="background: white; border-radius: 12px; width: 340px; box-shadow: 0 10px 40px rgba(0,0,0,0.25);">
+      <div style="background: var(--color-primary, #1F4788); color: white; padding: 16px 20px; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 16px;">Modifier — <span id="vdlModalLabel"></span></h3>
+        <button onclick="closeVDLModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; line-height: 1; padding: 0;">×</button>
+      </div>
+      <div style="padding: 24px 20px;">
+        <label style="display: block; font-weight: 600; font-size: 13px; color: #555; margin-bottom: 8px;">Nombre de points</label>
+        <input type="number" id="vdlModalPoints" min="0" max="99"
+          style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 20px; text-align: center; box-sizing: border-box;"
+          onkeydown="if(event.key==='Enter') saveVDLRule()">
+      </div>
+      <div style="padding: 0 20px 20px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button onclick="closeVDLModal()" class="btn" style="background: #6c757d; color: white; padding: 8px 20px;">Annuler</button>
+        <button onclick="saveVDLRule()" class="btn" style="background: #28a745; color: white; padding: 8px 24px; font-weight: 600;">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Edit/Create Scoring Rule Modal -->
   <div id="editScoringRuleModal" class="bareme-modal-overlay" onclick="if(event.target === this) closeScoringModal()">
     <div class="bareme-modal-content">
