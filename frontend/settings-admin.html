@@ -2060,14 +2060,15 @@
           <div id="customBonusBlocks" style="margin-top: 10px;">
             <div style="text-align: center; padding: 20px; color: #666;">Chargement...</div>
           </div>
-          <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-            <h4 style="margin: 0 0 10px; font-size: 14px; color: var(--color-primary, #1F4788);">
-              Ajouter un nouveau bloc de conditions
+          <div style="margin-top: 28px; border-top: 2px dashed #dee2e6; padding-top: 20px;">
+            <h4 style="margin: 0 0 4px; font-size: 15px; color: var(--color-primary, #1F4788);">
+              ➕ Créer un nouveau type de bonus
             </h4>
+            <p style="margin: 0 0 12px; font-size: 12px; color: #888;">Chaque bonus créé apparaît comme un bloc indépendant avec ses propres conditions.</p>
             <div class="add-block-form">
-              <input type="text" id="newBlockName" placeholder="Nom du bloc (ex: Bonus Participation)" maxlength="50">
-              <input type="text" id="newBlockLabel" placeholder="Libellé colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
-              <button class="btn-add-sm" onclick="addScoringBlock()">Ajouter le bloc</button>
+              <input type="text" id="newBlockName" placeholder="Nom du bonus (ex: Bonus Participation)" maxlength="50">
+              <input type="text" id="newBlockLabel" placeholder="En-tête colonne (ex: Bonus Part.)" maxlength="30" style="max-width: 200px;">
+              <button class="btn-add-sm" onclick="addScoringBlock()">Créer ce bonus</button>
             </div>
           </div>
         </div>
