@@ -6303,7 +6303,7 @@
         if (response.ok) {
           closeVDLModal();
           loadScoringRules();
-          showMessage('success', 'Barème mis à jour');
+          showRetroactiveModal(() => {});
         } else {
           const data = await response.json();
           showMessage('error', data.error || 'Erreur');
@@ -6312,6 +6312,64 @@
         showMessage('error', 'Erreur de connexion');
       }
     }
+
+    // ── Retroactive recalculation modal ──────────────────────────────────────
+    let _retroactiveConfirmCallback = null;
+
+    function showRetroactiveModal(onConfirm) {
+      _retroactiveConfirmCallback = onConfirm;
+      // Reset to default option
+      document.querySelector('#retroactiveRecalcModal input[value="none"]').checked = true;
+      document.querySelectorAll('#retroactiveRecalcModal label').forEach(l => {
+        l.style.borderColor = '#e2e8f0';
+      });
+      document.querySelector('#retroactiveRecalcModal label:first-of-type').style.borderColor = 'var(--color-primary,#1F4788)';
+      document.getElementById('retroFromDateRow').style.display = 'none';
+      document.getElementById('retroFromDate').value = '';
+      const overlay = document.getElementById('retroactiveRecalcModal');
+      overlay.style.display = 'flex';
+    }
+
+    function _retroactiveCancel() {
+      document.getElementById('retroactiveRecalcModal').style.display = 'none';
+      _retroactiveConfirmCallback = null;
+    }
+
+    async function _retroactiveConfirm() {
+      const option = document.querySelector('#retroactiveRecalcModal input[name="retroCalcOption"]:checked')?.value || 'none';
+      document.getElementById('retroactiveRecalcModal').style.display = 'none';
+
+      if (option === 'none') return;
+
+      const fromDate = option === 'from_date' ? document.getElementById('retroFromDate').value : null;
+      if (option === 'from_date' && !fromDate) {
+        showMessage('error', 'Veuillez choisir une date de départ pour le recalcul.');
+        return;
+      }
+
+      showMessage('info', 'Recalcul en cours…');
+      try {
+        const body = {};
+        if (fromDate) body.from_date = fromDate;
+        const resp = await authFetch(`${API_URL}/tournaments/recompute-all-bonuses`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          let msg = `✅ Recalcul terminé — ${data.recomputed} catégorie(s) mises à jour.`;
+          if (fromDate) msg += ` (depuis le ${fromDate})`;
+          if (data.warnings && data.warnings.length > 0) msg += '\n⚠ ' + data.warnings.join('\n⚠ ');
+          showMessage('success', msg);
+        } else {
+          showMessage('error', data.error || 'Erreur lors du recalcul');
+        }
+      } catch (e) {
+        showMessage('error', 'Erreur de connexion lors du recalcul');
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     function populateScoringDropdowns() {
       ['editField1', 'editField2'].forEach(id => {
@@ -6472,7 +6530,7 @@
         if (response.ok) {
           closeScoringModal();
           loadScoringRules();
-          showMessage('success', id ? 'Condition mise à jour' : 'Condition ajoutée');
+          showRetroactiveModal(() => {});
         } else {
           const data = await response.json();
           showMessage('error', data.error || 'Erreur');
@@ -7346,6 +7404,50 @@
       <div style="padding: 0 20px 20px; display: flex; justify-content: flex-end; gap: 10px;">
         <button onclick="closeVDLModal()" class="btn" style="background: #6c757d; color: white; padding: 8px 20px;">Annuler</button>
         <button onclick="saveVDLRule()" class="btn" style="background: #28a745; color: white; padding: 8px 24px; font-weight: 600;">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Retroactive Recalculation Choice Modal (shown after saving a scoring rule) -->
+  <div id="retroactiveRecalcModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); z-index: 1200; align-items: center; justify-content: center;" onclick="if(event.target===this) _retroactiveCancel()">
+    <div style="background: white; border-radius: 14px; width: 440px; max-width: 95vw; box-shadow: 0 12px 48px rgba(0,0,0,0.3);">
+      <div style="background: var(--color-primary, #1F4788); color: white; padding: 16px 20px; border-radius: 14px 14px 0 0; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 15px;">✅ Règle enregistrée</h3>
+        <button onclick="_retroactiveCancel()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; line-height: 1; padding: 0;">×</button>
+      </div>
+      <div style="padding: 22px 22px 10px;">
+        <p style="margin: 0 0 16px; color: #333; font-size: 14px;">Voulez-vous recalculer les résultats historiques avec ce nouveau barème ?</p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; transition: border-color .15s;" onclick="this.style.borderColor='var(--color-primary,#1F4788)'; document.querySelectorAll('#retroactiveRecalcModal label').forEach(l=>{ if(l!==this) l.style.borderColor='#e2e8f0'; })">
+            <input type="radio" name="retroCalcOption" value="none" checked style="accent-color: var(--color-primary,#1F4788);">
+            <div>
+              <div style="font-weight: 600; font-size: 13px; color: #333;">Non — appliquer seulement aux prochains imports</div>
+              <div style="font-size: 12px; color: #666;">Les résultats déjà enregistrés restent inchangés.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; transition: border-color .15s;" onclick="this.style.borderColor='var(--color-primary,#1F4788)'; document.querySelectorAll('#retroactiveRecalcModal label').forEach(l=>{ if(l!==this) l.style.borderColor='#e2e8f0'; }); document.getElementById('retroFromDateRow').style.display='none';">
+            <input type="radio" name="retroCalcOption" value="all" style="accent-color: var(--color-primary,#1F4788);" onclick="document.getElementById('retroFromDateRow').style.display='none';">
+            <div>
+              <div style="font-weight: 600; font-size: 13px; color: #333;">Oui — recalculer tous les tournois de la saison en cours</div>
+              <div style="font-size: 12px; color: #666;">Retraite l'ensemble des tournois de la saison.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 8px; transition: border-color .15s;" onclick="this.style.borderColor='var(--color-primary,#1F4788)'; document.querySelectorAll('#retroactiveRecalcModal label').forEach(l=>{ if(l!==this) l.style.borderColor='#e2e8f0'; }); document.getElementById('retroFromDateRow').style.display='flex';">
+            <input type="radio" name="retroCalcOption" value="from_date" style="accent-color: var(--color-primary,#1F4788);" onclick="document.getElementById('retroFromDateRow').style.display='flex';">
+            <div>
+              <div style="font-weight: 600; font-size: 13px; color: #333;">Oui — recalculer depuis une date précise</div>
+              <div style="font-size: 12px; color: #666;">Uniquement les tournois dont la date est ≥ à la date choisie.</div>
+            </div>
+          </label>
+          <div id="retroFromDateRow" style="display: none; align-items: center; gap: 10px; padding: 8px 12px 4px 34px;">
+            <label style="font-size: 13px; color: #555; font-weight: 600; white-space: nowrap;">À partir du :</label>
+            <input type="date" id="retroFromDate" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+          </div>
+        </div>
+      </div>
+      <div style="padding: 14px 22px 20px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button onclick="_retroactiveCancel()" class="btn" style="background: #6c757d; color: white; padding: 8px 20px; font-size: 13px;">Fermer</button>
+        <button onclick="_retroactiveConfirm()" class="btn" style="background: var(--color-primary,#1F4788); color: white; padding: 8px 24px; font-weight: 600; font-size: 13px;">Confirmer</button>
       </div>
     </div>
   </div>

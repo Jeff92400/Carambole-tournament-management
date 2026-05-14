@@ -58,6 +58,85 @@ function recalculatePositions(tournamentId, orgId, callback) {
 }
 
 /**
+ * Populate poule_rank in tournament_results from convocation_poules data.
+ * Cross-references the convocation poule assignments (sent before the tournament)
+ * to compute per-poule rank (1 = 1st in the poule) based on match_points DESC,
+ * moyenne DESC — the same tiebreaker used for global position.
+ * Silently skips when no convocation data is found (e.g. no convocations were sent).
+ */
+async function computePouleRanks(tournamentId, orgId) {
+  try {
+    const t = await dbGetAsync(
+      'SELECT tournament_number, season, organization_id FROM tournaments WHERE id = $1',
+      [tournamentId]
+    );
+    if (!t) return;
+
+    const effectiveOrgId = t.organization_id || orgId;
+
+    // Find poule assignments from convocation_poules, restricted to licences that
+    // actually appear in the tournament results (avoids wrong-category cross-contamination)
+    const assignments = await dbAllAsync(
+      `SELECT DISTINCT cp.licence, cp.poule_number
+       FROM convocation_poules cp
+       JOIN tournoi_ext te ON cp.tournoi_id = te.tournoi_id
+       WHERE te.tournament_number = $1
+         AND te.season = $2
+         AND ($3::int IS NULL OR te.organization_id = $3)
+         AND REPLACE(UPPER(cp.licence), ' ', '') IN (
+           SELECT REPLACE(UPPER(licence), ' ', '') FROM tournament_results WHERE tournament_id = $4
+         )`,
+      [t.tournament_number, t.season, effectiveOrgId, tournamentId]
+    );
+
+    if (!assignments || assignments.length === 0) {
+      logger.log(`[POULE_RANK] No convocation data for tournament ${tournamentId}, skipping`);
+      return;
+    }
+
+    // Normalized licence → poule_number map
+    const licenceToPoule = {};
+    for (const a of assignments) {
+      licenceToPoule[(a.licence || '').replace(/\s+/g, '').toUpperCase()] = a.poule_number;
+    }
+
+    // Fetch results
+    const results = await dbAllAsync(
+      'SELECT id, licence, match_points, points, reprises FROM tournament_results WHERE tournament_id = $1',
+      [tournamentId]
+    );
+    if (!results || results.length === 0) return;
+
+    // Group by poule
+    const poules = {};
+    for (const r of results) {
+      const norm = (r.licence || '').replace(/\s+/g, '').toUpperCase();
+      const pouleNum = licenceToPoule[norm];
+      if (pouleNum == null) continue;
+      const moyenne = r.reprises > 0 ? r.points / r.reprises : 0;
+      if (!poules[pouleNum]) poules[pouleNum] = [];
+      poules[pouleNum].push({ id: r.id, match_points: r.match_points || 0, moyenne });
+    }
+
+    // Sort within each poule and assign rank
+    const updates = [];
+    for (const players of Object.values(poules)) {
+      players.sort((a, b) =>
+        b.match_points !== a.match_points ? b.match_points - a.match_points : b.moyenne - a.moyenne
+      );
+      players.forEach((p, idx) => updates.push({ id: p.id, poule_rank: idx + 1 }));
+    }
+
+    for (const u of updates) {
+      await dbRunAsync('UPDATE tournament_results SET poule_rank = $1 WHERE id = $2', [u.poule_rank, u.id]);
+    }
+    logger.log(`[POULE_RANK] Set poule ranks for ${updates.length} results in tournament ${tournamentId}`);
+  } catch (e) {
+    console.error(`[POULE_RANK] Error for tournament ${tournamentId}:`, e);
+  }
+}
+
+/**
  * Helper to get value from record using mapping configuration
  */
 function getMappedValue(record, mapping, fieldName, defaultValue = null) {
@@ -1289,6 +1368,8 @@ function resolveField(fieldCode, playerResult, tournamentContext) {
       return playerResult.serie || 0;
     case 'POSITION':
       return playerResult.position || 0;
+    case 'POULE_RANK':
+      return playerResult.poule_rank || 0;
     case 'PARTIES_MENEES':
       return playerResult.parties_menees || 0;
     case 'MPART':
@@ -1558,7 +1639,7 @@ function computeBonusPoints(tournamentId, categoryId, orgId, callback) {
 
               // 4. Get all player results
               db.all(
-                'SELECT id, licence, points, reprises, match_points, serie, position, parties_menees, meilleure_partie FROM tournament_results WHERE tournament_id = ?',
+                'SELECT id, licence, points, reprises, match_points, serie, position, parties_menees, meilleure_partie, poule_rank FROM tournament_results WHERE tournament_id = ?',
                 [tournamentId],
                 (err, results) => {
                   if (err || !results || results.length === 0) {
@@ -2140,18 +2221,21 @@ async function recalculateRankingsStandard(categoryId, season, callback, orgId) 
 }
 
 // Recompute bonus points for all tournaments in a category/season
-async function recomputeAllBonuses(categoryId, season, orgId, callback) {
+// Optional fromDate (ISO date string): restricts to tournaments on or after that date
+async function recomputeAllBonuses(categoryId, season, orgId, callback, fromDate = null) {
   try {
     const rankingNumbers = await getRankingTournamentNumbers(orgId);
     if (!rankingNumbers || rankingNumbers.length === 0) {
       logger.log(`[BONUS] No ranking tournament numbers for org ${orgId}, skipping recompute`);
       return callback(null);
     }
-    logger.log(`[BONUS] Recomputing bonuses for category ${categoryId}, season ${season}, org ${orgId}, tournamentNumbers=[${rankingNumbers.join(',')}]`);
+    logger.log(`[BONUS] Recomputing bonuses for category ${categoryId}, season ${season}, org ${orgId}, tournamentNumbers=[${rankingNumbers.join(',')}]${fromDate ? `, fromDate=${fromDate}` : ''}`);
 
+    const dateFilter = fromDate ? ' AND (tournament_date IS NULL OR tournament_date >= $4)' : '';
+    const queryParams = fromDate ? [categoryId, season, orgId, fromDate] : [categoryId, season, orgId];
     const tournaments = await dbAllAsync(
-      `SELECT id FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbers.join(',')}) AND ($3::int IS NULL OR organization_id = $3)`,
-      [categoryId, season, orgId]
+      `SELECT id FROM tournaments WHERE category_id = $1 AND season = $2 AND tournament_number IN (${rankingNumbers.join(',')}) AND ($3::int IS NULL OR organization_id = $3)${dateFilter}`,
+      queryParams
     );
 
     if (!tournaments || tournaments.length === 0) {
@@ -2167,6 +2251,11 @@ async function recomputeAllBonuses(categoryId, season, orgId, callback) {
       } catch (ppErr) {
         console.error(`[BONUS] Error assigning position points for tournament ${t.id}:`, ppErr);
       }
+    }
+
+    // Step 1.5: Populate per-poule ranks from convocation_poules (needed by POULE_RANK scoring field)
+    for (const t of tournaments) {
+      await computePouleRanks(t.id, orgId);
     }
 
     // Step 2: Compute barème bonus points (sequential, one tournament at a time)
@@ -3341,6 +3430,8 @@ router.post('/recompute-all-bonuses', authenticateToken, async (req, res) => {
     }
 
     const orgId = req.user.organizationId || null;
+    // Optional from_date: ISO date string (YYYY-MM-DD); restricts to tournaments on or after that date
+    const fromDate = req.body?.from_date || null;
     const season = await appSettings.getCurrentSeason();
 
     // Get all categories for this org with tournaments in current season
@@ -3390,7 +3481,7 @@ router.post('/recompute-all-bonuses', authenticateToken, async (req, res) => {
             }
             resolve();
           });
-        });
+        }, fromDate);
       });
     }
 
