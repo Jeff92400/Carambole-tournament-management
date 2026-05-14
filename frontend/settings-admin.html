@@ -6142,7 +6142,13 @@
       const baseRules = rules.filter(r => r.rule_type === 'BASE_VDL');
 
       if (baseRules.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Aucun barème configuré</div>';
+        container.innerHTML = `
+          <div style="text-align: center; padding: 20px; color: #666;">
+            Aucun barème configuré
+            <div style="margin-top: 12px;">
+              <button class="btn-add-sm" onclick="openCreateScoringModal('BASE_VDL')">+ Ajouter une condition</button>
+            </div>
+          </div>`;
         return;
       }
 
@@ -6217,11 +6223,9 @@
                   `).join('')}
                 </tbody>
               </table>
-              ${!isBuiltIn ? `
-                <div class="add-rule-bar">
-                  <button class="btn-add-sm" onclick="openCreateScoringModal('${escapeHtmlBareme(blockType)}')">+ Ajouter une condition</button>
-                </div>
-              ` : ''}
+              <div class="add-rule-bar">
+                <button class="btn-add-sm" onclick="openCreateScoringModal('${escapeHtmlBareme(blockType)}')">+ Ajouter une condition</button>
+              </div>
             </div>
           </div>
         `;
