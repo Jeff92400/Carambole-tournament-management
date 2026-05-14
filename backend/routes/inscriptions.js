@@ -874,56 +874,64 @@ router.post('/seed-import-history', authenticateToken, (req, res) => {
   });
 });
 
-// Get upcoming tournaments (for the current weekend and next weekend)
+// Get upcoming tournaments — window based on per-org setting `threshold_display_competitions`
+// (defaults to 28 days). Fix applied 2026-05-12 — the previous implementation hardcoded
+// "tomorrow → next Sunday + 7 days" (~14 days max), ignoring the configured threshold.
 // IMPORTANT: This route must be BEFORE /tournoi/:id to avoid :id catching "upcoming"
-router.get('/tournoi/upcoming', authenticateToken, (req, res) => {
-  const orgId = req.user.organizationId || null;
+router.get('/tournoi/upcoming', authenticateToken, async (req, res) => {
+  try {
+    const orgId = req.user.organizationId || null;
 
-  // Get today's date
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+    // Read the per-org threshold (days ahead of today for the "Compétitions à venir" window).
+    // Setting key: threshold_display_competitions — default 28.
+    const thresholdRaw = await appSettings.getOrgSetting(orgId, 'threshold_display_competitions');
+    const thresholdDays = parseInt(thresholdRaw, 10) || 28;
 
-  // Start from tomorrow (today's tournaments are being played)
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+    // Get today's date (Paris timezone is handled implicitly via DATE column on `debut`)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  // Get the next Sunday (end of current weekend) and the following Sunday (end of next weekend)
-  const daysUntilSunday = (7 - tomorrow.getDay()) % 7;
-  const thisSunday = new Date(tomorrow);
-  thisSunday.setDate(tomorrow.getDate() + daysUntilSunday);
+    // Start from tomorrow (today's tournaments are being played, no longer "à venir")
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const nextSunday = new Date(thisSunday);
-  nextSunday.setDate(thisSunday.getDate() + 7);
+    // End window = today + thresholdDays (inclusive)
+    const endWindow = new Date(today);
+    endWindow.setDate(today.getDate() + thresholdDays);
 
-  // Format dates for SQL
-  const startDate = tomorrow.toISOString().split('T')[0];
-  const endDate = nextSunday.toISOString().split('T')[0];
+    // Format dates for SQL
+    const startDate = tomorrow.toISOString().split('T')[0];
+    const endDate = endWindow.toISOString().split('T')[0];
 
-  logger.log(`Fetching upcoming tournaments from ${startDate} to ${endDate}`);
+    logger.log(`Fetching upcoming tournaments from ${startDate} to ${endDate} (threshold=${thresholdDays}d, org=${orgId})`);
 
-  const query = `
-    SELECT t.*,
-           COUNT(CASE WHEN i.inscription_id IS NOT NULL AND (i.forfait IS NULL OR i.forfait != 1) AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible')) THEN 1 END) as inscrit_count,
-           COUNT(CASE WHEN i.inscription_id IS NOT NULL AND i.forfait = 1 THEN 1 END) as forfait_count
-    FROM tournoi_ext t
-    LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
-    WHERE t.debut >= $1 AND t.debut <= $2
-    AND LOWER(t.nom) NOT LIKE '%finale%'
-    AND t.parent_tournoi_id IS NULL
-    AND ($3::int IS NULL OR t.organization_id = $3)
-    GROUP BY t.tournoi_id
-    ORDER BY t.debut ASC, t.mode, t.categorie
-  `;
+    const query = `
+      SELECT t.*,
+             COUNT(CASE WHEN i.inscription_id IS NOT NULL AND (i.forfait IS NULL OR i.forfait != 1) AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible')) THEN 1 END) as inscrit_count,
+             COUNT(CASE WHEN i.inscription_id IS NOT NULL AND i.forfait = 1 THEN 1 END) as forfait_count
+      FROM tournoi_ext t
+      LEFT JOIN inscriptions i ON t.tournoi_id = i.tournoi_id
+      WHERE t.debut >= $1 AND t.debut <= $2
+      AND LOWER(t.nom) NOT LIKE '%finale%'
+      AND t.parent_tournoi_id IS NULL
+      AND ($3::int IS NULL OR t.organization_id = $3)
+      GROUP BY t.tournoi_id
+      ORDER BY t.debut ASC, t.mode, t.categorie
+    `;
 
-  db.all(query, [startDate, endDate, orgId], (err, rows) => {
-    if (err) {
-      console.error('Error fetching upcoming tournaments:', err);
-      return res.status(500).json({ error: err.message });
-    }
+    db.all(query, [startDate, endDate, orgId], (err, rows) => {
+      if (err) {
+        console.error('Error fetching upcoming tournaments:', err);
+        return res.status(500).json({ error: err.message });
+      }
 
-    logger.log(`Found ${(rows || []).length} upcoming tournaments`);
-    res.json(rows || []);
-  });
+      logger.log(`Found ${(rows || []).length} upcoming tournaments`);
+      res.json(rows || []);
+    });
+  } catch (e) {
+    console.error('Error in /tournoi/upcoming:', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Get all upcoming tournaments (from today onwards) for calendar modal
