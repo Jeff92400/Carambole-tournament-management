@@ -1802,7 +1802,23 @@ router.delete('/tournoi/:tournoiId', authenticateToken, async (req, res) => {
     });
 
     if (!tournoi) {
-      return res.status(404).json({ error: 'Tournoi non trouvé' });
+      // V 2.0.794 — Diagnose why the tournament wasn't found. Either it
+      // doesn't exist at all, OR it exists but belongs to a different org
+      // (org-scope mismatch — caller can't delete a foreign org's tournament).
+      // Surfacing the discriminator helps the admin understand the real cause.
+      const unscoped = await new Promise((resolve) => {
+        db.get(
+          'SELECT tournoi_id, nom, organization_id FROM tournoi_ext WHERE tournoi_id = $1',
+          [tournoiId],
+          (err, row) => resolve(err ? null : row)
+        );
+      });
+      if (unscoped) {
+        return res.status(403).json({
+          error: `Tournoi #${tournoiId} appartient à l'organisation #${unscoped.organization_id || 'NULL'}, vous êtes connecté à l'organisation #${orgId || 'NULL'}. Impossible de supprimer.`
+        });
+      }
+      return res.status(404).json({ error: `Tournoi #${tournoiId} non trouvé en base.` });
     }
 
     // Collect IDs to delete: the tournoi itself + any split children
