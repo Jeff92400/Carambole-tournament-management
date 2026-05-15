@@ -2778,6 +2778,55 @@ router.delete('/distance-matrices/:id', authenticateToken, requireAdmin, async (
 });
 
 // ============================================================================
+// V 2.0.788 — Sprint 2 C: Quilles helpers test endpoint
+//
+// GET /api/settings/quilles/resolve-distance/:tournoiId?nb_poules=N
+// Returns { distance, source, warning? } using the resolveDistance helper.
+// Useful for admins to preview what distance will be used before generating
+// poules, and for the DdJ workflow to surface the value in the UI.
+// ============================================================================
+router.get('/quilles/resolve-distance/:tournoiId', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.tournoiId, 10);
+  const nbPoules = req.query.nb_poules ? parseInt(req.query.nb_poules, 10) : null;
+
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'tournoi_id invalide' });
+  }
+
+  try {
+    const row = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id, mode, fixed_distance, distance_matrix_id,
+                nb_tables, organization_id
+           FROM tournoi_ext
+          WHERE tournoi_id = $1
+            AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, r) => err ? reject(err) : resolve(r)
+      );
+    });
+    if (!row) return res.status(404).json({ error: 'Tournoi introuvable' });
+
+    const { resolveDistance } = require('../utils/quilles-helpers');
+    const result = await resolveDistance(row, nbPoules, { db });
+    res.json({
+      tournoi_id: tournoiId,
+      mode: row.mode,
+      fixed_distance: row.fixed_distance,
+      distance_matrix_id: row.distance_matrix_id,
+      nb_tables: row.nb_tables,
+      nb_poules: nbPoules,
+      ...result
+    });
+  } catch (err) {
+    console.error('[quilles/resolve-distance] error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================================
 // V 2.0.784 — CRUD endpoints for Quilles tournament types
 // Admin can add/rename/reorder/deactivate types (régional, qualif_n1, ...)
 // from the Settings UI. Reference data is global (not org-scoped) since the
