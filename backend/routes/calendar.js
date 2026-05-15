@@ -55,15 +55,23 @@ const CATEGORY_MAPPING = {
 };
 
 // Tournament type to name mapping
+// V 2.0.787 — TR1-TR4 (Tour Régional, Quilles LBIF) added alongside carambole
+// T1-T3+F. Both schemes share the same tournament_number int domain (1-4).
 const TOURNAMENT_NAME_MAPPING = {
   'T1': 'Tournoi 1',
   'T2': 'Tournoi 2',
   'T3': 'Tournoi 3',
-  'F': 'Finale Départementale'
+  'F': 'Finale Départementale',
+  'TR1': 'Tour Régional 1',
+  'TR2': 'Tour Régional 2',
+  'TR3': 'Tour Régional 3',
+  'TR4': 'Tour Régional 4',
+  'FL': 'Finale de Ligue'
 };
 
 const TOURNAMENT_NUMBER_MAPPING = {
-  'T1': 1, 'T2': 2, 'T3': 3, 'F': 4
+  'T1': 1, 'T2': 2, 'T3': 3, 'F': 4,
+  'TR1': 1, 'TR2': 2, 'TR3': 3, 'TR4': 4, 'FL': 5
 };
 
 const router = express.Router();
@@ -462,9 +470,16 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
     for (const tournament of tournaments) {
       try {
         await new Promise((resolve, reject) => {
+          // V 2.0.787 — INSERT extended with Quilles columns
+          // (tournament_format, tournament_type, tour_number). For carambole
+          // rows the parser sets them to null, so the schema defaults apply.
           db.run(`
-            INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, lieu, tournament_number, organization_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO tournoi_ext (
+              tournoi_id, nom, mode, categorie, taille, debut, lieu,
+              tournament_number, organization_id,
+              tournament_format, tournament_type, tour_number
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             ON CONFLICT(tournoi_id) DO UPDATE SET
               nom = EXCLUDED.nom,
               mode = EXCLUDED.mode,
@@ -473,7 +488,10 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
               debut = EXCLUDED.debut,
               lieu = EXCLUDED.lieu,
               tournament_number = EXCLUDED.tournament_number,
-              organization_id = EXCLUDED.organization_id
+              organization_id = EXCLUDED.organization_id,
+              tournament_format = COALESCE(EXCLUDED.tournament_format, tournoi_ext.tournament_format),
+              tournament_type = COALESCE(EXCLUDED.tournament_type, tournoi_ext.tournament_type),
+              tour_number = COALESCE(EXCLUDED.tour_number, tournoi_ext.tour_number)
           `, [
             tournament.tournoi_id,
             tournament.nom,
@@ -483,7 +501,10 @@ router.post('/import-season/execute', authenticateToken, requireAdmin, importUpl
             tournament.debut,
             tournament.lieu,
             tournament.tournament_number,
-            orgId
+            orgId,
+            tournament.tournament_format,
+            tournament.tournament_type,
+            tournament.tour_number
           ], function(err) {
             if (err) {
               reject(err);
@@ -676,6 +697,15 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
       }
     }
 
+    // V 2.0.787 — Quilles LBIF tournaments have no FFB category (open to all
+    // ranks). The tournament_type field carries the classification instead
+    // (régional / qualif_n1 / finale_ligue). Use 'OPEN' as the sentinel value
+    // so the NOT NULL constraint on tournoi_ext.categorie is satisfied,
+    // mirroring the behaviour of the create-tournament form.
+    if (!category && (currentMode === '5Q' || currentMode === '9Q')) {
+      category = 'OPEN';
+    }
+
     // Get Pts/Rep (taille) from column 4
     let taille = null;
     const col4Value = getCellValue(row.getCell(4));
@@ -706,17 +736,22 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
       if (upperValue.match(/^F?\d{4}/)) continue; // e.g. "F2024", "2025"
 
       // Parse tournament type:
-      //   "T1", "T2", "T3" — standard tournaments
+      //   "T1", "T2", "T3" — standard carambole tournaments
       //   "T1/A", "T2/B" — with club code
       //   "FD", "F", "F/?" — finale départementale
-      const match = upperValue.match(/^(T[123]|FD|F)(?:\/([A-Z?]))?$/i);
+      // V 2.0.787 — Quilles LBIF markers added:
+      //   "TR1"–"TR4" — tour régional 1-4
+      //   "FL" — finale de Ligue
+      //   All Quilles markers also accept the "/A" club-code suffix.
+      const match = upperValue.match(/^(T[123]|TR[1234]|FD|FL|F)(?:\/([A-Z?]))?$/i);
       if (!match) continue;
 
       let tournamentType = match[1].toUpperCase();
       const clubCode = match[2] ? match[2].toUpperCase() : null;
 
-      // Normalize FD → F
-      const isFinal = (tournamentType === 'F' || tournamentType === 'FD');
+      // Normalize FD → F (kept for backwards compatibility with carambole calendars).
+      // FL stays as FL (Finale de Ligue, Quilles-only).
+      const isFinal = (tournamentType === 'F' || tournamentType === 'FD' || tournamentType === 'FL');
       if (tournamentType === 'FD') tournamentType = 'F';
 
       // Get the date — Saturday for TQ, Sunday for Finals (fallback to Saturday)
@@ -736,6 +771,21 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
       const lieu = clubCode ? (clubMapping[clubCode] || null) : null;
       const debut = formatDateStr(tournamentDate);
 
+      // V 2.0.787 — Quilles enrichment. When the row is a Quilles mode, the
+      // tournament runs in 'single_day_bracket' format, and the marker maps
+      // to a tournament_type (FL → finale_ligue, TR1-TR4 → regional unless
+      // an admin reclassifies later).
+      const isQuillesMode = currentMode === '5Q' || currentMode === '9Q';
+      const quillesFields = isQuillesMode ? {
+        tournament_format: 'single_day_bracket',
+        tournament_type: tournamentType === 'FL' ? 'finale_ligue' : 'regional',
+        tour_number: TOURNAMENT_NUMBER_MAPPING[tournamentType] || null
+      } : {
+        tournament_format: null,
+        tournament_type: null,
+        tour_number: null
+      };
+
       tournaments.push({
         tournoi_id,
         nom,
@@ -745,6 +795,7 @@ async function parseExcelCalendar(buffer, season, seasonPrefix, clubMapping) {
         debut,
         lieu,
         tournament_number: TOURNAMENT_NUMBER_MAPPING[tournamentType] || null,
+        ...quillesFields,
         _type: tournamentType,
         _club_code: clubCode,
         _is_finale: isFinal
@@ -791,19 +842,28 @@ function extractDate(cell) {
 }
 
 // Helper: Check if a string contains a game mode name
+// V 2.0.787 — 5Q / 9Q (Quilles LBIF) added so calendars containing
+// Quilles rows are parsed instead of silently skipped.
 function hasModeName(str) {
   const upper = str.toUpperCase().trim();
   return upper.includes('LIBRE') || upper.includes('CADRE') ||
-         upper === 'BANDE' || upper.includes('3 BANDES') || upper.includes('3BANDES');
+         upper === 'BANDE' || upper.includes('3 BANDES') || upper.includes('3BANDES') ||
+         upper === '5Q' || upper === '9Q' ||
+         upper.includes('5 QUILLES') || upper.includes('9 QUILLES');
 }
 
 // Helper: Detect game mode from a cell value string
+// Returns the canonical mode code used in tournoi_ext.mode. Quilles modes
+// are stored as '5Q' / '9Q' (game_modes.code), matching the dropdown values
+// in the tournament creation form.
 function detectMode(str) {
   const upper = str.toUpperCase().trim();
   if (upper.includes('3 BANDES') || upper.includes('3BANDES')) return '3 BANDES';
   if (upper === 'BANDE') return 'BANDE';
   if (upper.includes('CADRE')) return 'CADRE';
   if (upper.includes('LIBRE')) return 'LIBRE';
+  if (upper === '5Q' || upper.includes('5 QUILLES') || upper.includes('5QUILLES')) return '5Q';
+  if (upper === '9Q' || upper.includes('9 QUILLES') || upper.includes('9QUILLES')) return '9Q';
   return null;
 }
 
