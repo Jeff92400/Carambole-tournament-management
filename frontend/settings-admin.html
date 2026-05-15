@@ -7907,7 +7907,20 @@
       let html = '<thead>';
       html += `<tr>
         <th style="padding: 0; background: white; border: none;"></th>
-        <th colspan="${colSpan}" style="padding: 6px 8px; background: #c8102e; color: white; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-align: center; text-transform: uppercase;">Nombre de poules →</th>
+        <th colspan="${colSpan}" style="padding: 6px 8px; background: #c8102e; color: white; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-align: center; text-transform: uppercase;">Nombre de joueurs (poules de 3 ou 4)</th>
+      </tr>`;
+      // Player count range per poule (LBIF 5Q: poules of 3 or 4 players → range = [3p ... 4p])
+      html += '<tr><th style="padding: 6px 8px; background: #fdebd0; position: sticky; left: 0; z-index: 2; border-right: 2px solid #c8102e; font-size: 10px; color: #8b0000; font-weight: 700; text-transform: uppercase;">Joueurs</th>';
+      for (let p = pMin; p <= pMax; p++) {
+        const minJ = 3 * p;
+        const maxJ = 4 * p;
+        html += `<th style="padding: 6px 4px; background: #fdebd0; text-align: center; font-weight: 600; color: #8b0000; font-size: 12px; white-space: nowrap;">${minJ}–${maxJ}</th>`;
+      }
+      html += '</tr>';
+      // Second banner: "Nombre de poules"
+      html += `<tr>
+        <th style="padding: 0; background: white; border: none;"></th>
+        <th colspan="${colSpan}" style="padding: 6px 8px; background: #8b0000; color: white; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-align: center; text-transform: uppercase;">Nombre de poules →</th>
       </tr>`;
       // Column headers (poules numbers)
       html += '<tr><th style="padding: 8px; background: #fff8e1; position: sticky; left: 0; z-index: 2; border-right: 2px solid #c8102e; border-bottom: 2px solid #c8102e; font-size: 11px; color: #8b0000; font-weight: 700;">Tables ↓<br>Poules →</th>';
