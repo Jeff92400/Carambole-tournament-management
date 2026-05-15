@@ -589,8 +589,13 @@
       if (typeof renderQuillesBanner === 'function') renderQuillesBanner(t);
 
       // Header
+      // V 2.0.807 — Quilles: omit the 'OPEN' sentinel categorie from the
+      // title. The mode is already shown in the LBIF banner above, and
+      // categorisation is carried by tournament_type (Régional / Qualif N1).
+      const _isQuillesT2 = typeof isQuillesMode === 'function' && isQuillesMode(t.mode);
+      const titleCat = _isQuillesT2 ? '' : (t.categorie || '');
       document.getElementById('tournamentTitle').textContent =
-        `${t.mode || ''} ${t.categorie || ''}${t.nom ? ' — ' + t.nom : ''}`.trim();
+        `${t.mode || ''} ${titleCat}${t.nom ? ' — ' + t.nom : ''}`.trim().replace(/\s+/g, ' ');
       document.getElementById('tournamentMeta').textContent =
         `${formatDate(t.debut)}${t.lieu ? ' · ' + t.lieu : ''}`;
       const paramsEl = document.getElementById('tournamentParams');
@@ -715,10 +720,19 @@
         : '';
       const summaryText = `${pendingPart}✓ ${presentCount} présent${presentCount > 1 ? 's' : ''} · ${forfaitCount} forfait${forfaitCount > 1 ? 's' : ''}${pendingCount === 0 ? ' · ' + describePoules(presentCount) : ''}`;
 
+      // V 2.0.807 — Quilles: show tournament_type ("Régional", "Qualif N1",
+      // "Finale de Ligue") instead of the meaningless 'OPEN' sentinel.
+      const QUILLES_TYPE_LBLS = {
+        regional: 'Régional', qualif_n1: 'Qualif N1', finale_ligue: 'Finale de Ligue'
+      };
+      const catLabel = _isQuillesT2
+        ? (QUILLES_TYPE_LBLS[t.tournament_type] || t.tournament_type || 'Standard')
+        : (t.categorie || '—');
+      const catFieldLabel = _isQuillesT2 ? 'Type' : 'Catégorie';
       document.getElementById('pointageContent').innerHTML = `
         <div class="ddj-info-strip">
           <span><strong>📋 Convoqués :</strong> ${p.length}</span>
-          <span><strong>Mode :</strong> ${escapeHtml(t.mode || '—')} · <strong>Catégorie :</strong> ${escapeHtml(t.categorie || '—')}</span>
+          <span><strong>Mode :</strong> ${escapeHtml(t.mode || '—')} · <strong>${catFieldLabel} :</strong> ${escapeHtml(catLabel)}</span>
         </div>
 
         <div class="ddj-section-label">
