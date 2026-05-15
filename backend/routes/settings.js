@@ -481,8 +481,12 @@ router.put('/tournament-overrides/:tournoiId', authenticateToken, async (req, re
   const { distance, distance_type, reprises } = req.body;
   const username = req.user?.username || 'unknown';
 
-  if (!distance || !reprises) {
-    return res.status(400).json({ error: 'Distance et reprises sont requis' });
+  // V 2.0.805 — Quilles tournaments override the distance only (no reprises).
+  // Carambole still requires both. We accept reprises=null/missing when
+  // distance is set but reprises isn't — the caller is responsible for the
+  // semantic (the consumer of the override knows whether to read reprises).
+  if (!distance) {
+    return res.status(400).json({ error: 'Distance requise' });
   }
 
   try {

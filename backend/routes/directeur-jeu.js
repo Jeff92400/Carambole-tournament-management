@@ -204,26 +204,44 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
     // fixed_distance directly; 5Q needs nb_poules → counted from the saved
     // convocation_poules (poules already exist if we reached the pointage
     // screen). Reprises is forced to null (Quilles matches have no reprises).
+    // V 2.0.805 — tournament_parameter_overrides.distance takes priority
+    // (lets the DdJ change the distance on tournament day from the UI).
     try {
       const { isQuillesMode, resolveDistance } = require('../utils/quilles-helpers');
       if (isQuillesMode(tournament.mode)) {
-        const nbPoulesRow = await new Promise((resolve) => {
+        const overrideRow = await new Promise((resolve) => {
           db.get(
-            `SELECT COUNT(DISTINCT poule_number)::int AS n
-               FROM convocation_poules
-              WHERE tournoi_id = $1`,
+            `SELECT distance FROM tournament_parameter_overrides WHERE tournoi_id = $1`,
             [tournoiId],
             (err, r) => resolve(err ? null : r)
           );
         });
-        const nbPoules = nbPoulesRow?.n || null;
-        const resolved = await resolveDistance(tournament, nbPoules, { db });
-        gameParams = {
-          distance: resolved.distance,
-          reprises: null,
-          _quilles_source: resolved.source,
-          _quilles_warning: resolved.warning || null
-        };
+        if (overrideRow && overrideRow.distance != null) {
+          gameParams = {
+            distance: overrideRow.distance,
+            reprises: null,
+            _quilles_source: 'override',
+            _quilles_warning: null
+          };
+        } else {
+          const nbPoulesRow = await new Promise((resolve) => {
+            db.get(
+              `SELECT COUNT(DISTINCT poule_number)::int AS n
+                 FROM convocation_poules
+                WHERE tournoi_id = $1`,
+              [tournoiId],
+              (err, r) => resolve(err ? null : r)
+            );
+          });
+          const nbPoules = nbPoulesRow?.n || null;
+          const resolved = await resolveDistance(tournament, nbPoules, { db });
+          gameParams = {
+            distance: resolved.distance,
+            reprises: null,
+            _quilles_source: resolved.source,
+            _quilles_warning: resolved.warning || null
+          };
+        }
       }
     } catch (e) {
       console.error('[DdJ pointage] Quilles resolveDistance error:', e.message);
@@ -1443,29 +1461,52 @@ async function loadPouleMatches(db, orgId, tournoiId) {
   // V 2.0.791 — Sprint 2 D.2: for Quilles tournaments, override the
   // carambole game_parameters lookup with resolveDistance(). Reprises is
   // forced to null so the match screen doesn't render a reprises field.
+  // V 2.0.805 — tournament_parameter_overrides.distance takes priority
+  // (lets the DdJ change the distance on tournament day from the UI).
   try {
     const { isQuillesMode, resolveDistance } = require('../utils/quilles-helpers');
     if (isQuillesMode(tournament.mode)) {
-      const nbPoulesRow = await new Promise((resolve) => {
+      // The override SELECT was already run earlier; re-read it here for
+      // clarity (and to keep this code self-contained).
+      const overrideRow = await new Promise((resolve) => {
         db.get(
-          `SELECT COUNT(DISTINCT poule_number)::int AS n
-             FROM convocation_poules
-            WHERE tournoi_id = $1`,
+          `SELECT distance FROM tournament_parameter_overrides WHERE tournoi_id = $1`,
           [tournoiId],
           (err, r) => resolve(err ? null : r)
         );
       });
-      const nbPoules = nbPoulesRow?.n || null;
-      const resolved = await resolveDistance(tournament, nbPoules, { db });
-      gameParams = {
-        distance: resolved.distance,
-        distance_reduite: null,
-        reprises: null,
-        moyenne_mini: null,
-        moyenne_maxi: null,
-        _quilles_source: resolved.source,
-        _quilles_warning: resolved.warning || null
-      };
+      if (overrideRow && overrideRow.distance != null) {
+        gameParams = {
+          distance: overrideRow.distance,
+          distance_reduite: null,
+          reprises: null,
+          moyenne_mini: null,
+          moyenne_maxi: null,
+          _quilles_source: 'override',
+          _quilles_warning: null
+        };
+      } else {
+        const nbPoulesRow = await new Promise((resolve) => {
+          db.get(
+            `SELECT COUNT(DISTINCT poule_number)::int AS n
+               FROM convocation_poules
+              WHERE tournoi_id = $1`,
+            [tournoiId],
+            (err, r) => resolve(err ? null : r)
+          );
+        });
+        const nbPoules = nbPoulesRow?.n || null;
+        const resolved = await resolveDistance(tournament, nbPoules, { db });
+        gameParams = {
+          distance: resolved.distance,
+          distance_reduite: null,
+          reprises: null,
+          moyenne_mini: null,
+          moyenne_maxi: null,
+          _quilles_source: resolved.source,
+          _quilles_warning: resolved.warning || null
+        };
+      }
     }
   } catch (e) {
     console.error('[DdJ loadPouleMatches] Quilles resolveDistance error:', e.message);

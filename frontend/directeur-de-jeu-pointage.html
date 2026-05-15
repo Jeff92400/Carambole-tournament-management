@@ -481,6 +481,58 @@
       pendingByLicence: new Map()
     };
 
+    // V 2.0.805 — Sprint 2 D.5 follow-up: let the DdJ change the Quilles
+    // distance on tournament day. Stored in tournament_parameter_overrides
+    // (same table used by carambole). The DdJ /pointage and /poule-matches
+    // endpoints read this override with priority over the matrix lookup.
+    async function quillesEditDistance(tournoiId, currentDistance) {
+      const promptMsg =
+        `Distance actuelle : ${currentDistance} pts\n\n` +
+        `Saisissez la nouvelle distance (en points). ` +
+        `Cette modification s'applique uniquement à ce tournoi.\n\n` +
+        `Laissez vide pour réinitialiser (= distance calculée depuis la matrice).`;
+      const raw = window.prompt(promptMsg, String(currentDistance));
+      if (raw === null) return; // user cancelled
+
+      try {
+        if (raw.trim() === '') {
+          // Reset: DELETE the override → fallback to matrix resolution
+          const resp = await fetch(`${API_URL}/settings/tournament-overrides/${tournoiId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || 'Erreur ' + resp.status);
+          }
+          alert('✅ Distance réinitialisée (matrice).');
+        } else {
+          const n = parseInt(raw, 10);
+          if (!Number.isFinite(n) || n < 10 || n > 1000) {
+            alert('❌ Valeur invalide (10–1000 points).');
+            return;
+          }
+          const resp = await fetch(`${API_URL}/settings/tournament-overrides/${tournoiId}`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': 'Bearer ' + token,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ distance: n, reprises: null })
+          });
+          if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || 'Erreur ' + resp.status);
+          }
+          alert(`✅ Distance fixée à ${n} pts pour ce tournoi.`);
+        }
+        // Reload the pointage payload so the new distance shows in the header
+        await loadPointage();
+      } catch (e) {
+        alert('❌ ' + e.message);
+      }
+    }
+
     // V 2.0.801 — Sprint 2 G follow-up: lets the DdJ trigger Quilles
     // pre-convocations directly from the pointage empty state, without
     // having to navigate back to the admin tournament list. Calls the
@@ -542,7 +594,22 @@
       document.getElementById('tournamentMeta').textContent =
         `${formatDate(t.debut)}${t.lieu ? ' · ' + t.lieu : ''}`;
       const paramsEl = document.getElementById('tournamentParams');
-      if (t.distance != null || t.reprises != null) {
+      // V 2.0.805 — Quilles distance is editable on tournament day via an
+      // "✏️ Modifier" pill. Posts to /settings/tournament-overrides/:id
+      // which the DdJ /pointage and /poule-matches endpoints read with
+      // priority over the matrix lookup.
+      const isQuillesT = typeof isQuillesMode === 'function' && isQuillesMode(t.mode);
+      if (isQuillesT && t.distance != null) {
+        paramsEl.innerHTML =
+          `<span style="display: inline-flex; align-items: center; gap: 8px;">
+             <span>🎯 Distance : <strong>${t.distance} pts</strong></span>
+             <button onclick="quillesEditDistance(${t.tournoi_id}, ${t.distance})"
+                     style="padding: 3px 10px; font-size: 11px; background: white; color: #c8102e; border: 1px solid #c8102e; border-radius: 4px; cursor: pointer; font-weight: 600;"
+                     title="Modifier la distance pour le jour du tournoi">
+               ✏️ Modifier
+             </button>
+           </span>`;
+      } else if (t.distance != null || t.reprises != null) {
         paramsEl.textContent = `Dist: ${t.distance || '?'} · Rep: ${t.reprises || '?'}`;
       } else {
         paramsEl.textContent = '';
