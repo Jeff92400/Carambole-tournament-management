@@ -5209,4 +5209,122 @@ router.get('/tournoi/:id/children', authenticateToken, async (req, res) => {
   }
 });
 
+// ============================================================================
+// V 2.0.800 — Sprint 2 G: Quilles pre-convocation flow
+//
+// LBIF Quilles tournaments don't use the carambole multi-week serpentine
+// + per-category convocation pipeline (generate-poules.html). Players just
+// need a placeholder convocation_poules row so the DdJ workflow can take
+// over on tournament day (the DdJ regenerates the real poules from who
+// shows up to the pointage).
+//
+// POST /api/inscriptions/quilles/:tournoiId/send-convocations
+//   For each current inscription on the tournament:
+//   - INSERT a convocation_poules row (poule_number=1, player_order=N)
+//   - location_name = tournoi_ext.lieu, location_address = empty for now
+//   - start_time = 09:00 by default (LBIF tournaments start at 9 AM)
+//   Idempotent via ON CONFLICT DO NOTHING (UNIQUE on tournoi_id+poule+licence).
+//   Returns the number of convocations created (and skipped).
+//   Email sending is intentionally NOT included in this version — admins
+//   can use the existing email tools manually. A dedicated Quilles
+//   convocation email template will land in a follow-up.
+// ============================================================================
+router.post('/quilles/:tournoiId/send-convocations', authenticateToken, async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.tournoiId, 10);
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'tournoi_id invalide' });
+  }
+
+  try {
+    // 1. Verify the tournament exists, belongs to this org, and is Quilles
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id, nom, mode, lieu, debut
+           FROM tournoi_ext
+          WHERE tournoi_id = $1
+            AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi introuvable' });
+
+    const modeUp = String(tournament.mode || '').toUpperCase();
+    const isQuilles = modeUp === '5Q' || modeUp === '9Q'
+                  || modeUp === '5 QUILLES' || modeUp === '9 QUILLES';
+    if (!isQuilles) {
+      return res.status(400).json({
+        error: 'Cette procédure est réservée aux tournois Quilles. Pour les tournois carambole, utilisez le flux de convocations standard.'
+      });
+    }
+
+    // 2. Load active inscriptions (exclude forfait / désinscrit / indisponible)
+    const inscriptions = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT i.licence, p.first_name, p.last_name, p.club
+           FROM inscriptions i
+           LEFT JOIN players p
+             ON REPLACE(i.licence, ' ', '') = REPLACE(p.licence, ' ', '')
+            AND ($2::int IS NULL OR p.organization_id = $2)
+          WHERE i.tournoi_id = $1
+            AND (i.forfait IS NULL OR i.forfait != 1)
+            AND (i.statut IS NULL OR i.statut NOT IN ('désinscrit', 'indisponible'))
+            AND UPPER(i.licence) NOT LIKE 'TEST%'
+          ORDER BY p.last_name, p.first_name, i.licence`,
+        [tournoiId, orgId],
+        (err, rs) => err ? reject(err) : resolve(rs || [])
+      );
+    });
+
+    if (inscriptions.length === 0) {
+      return res.status(409).json({
+        error: 'Aucune inscription active. Inscrivez d\'abord les joueurs (via le Player App ou Ajouter une inscription) avant de générer les convocations.'
+      });
+    }
+
+    // 3. Insert convocation_poules rows (idempotent). Placeholder poule_number=1
+    //    and incremental player_order. The DdJ workflow rewrites these when it
+    //    generates the real poules from the pointage on tournament day.
+    let created = 0;
+    let skipped = 0;
+    for (let i = 0; i < inscriptions.length; i++) {
+      const ins = inscriptions[i];
+      const playerName = [ins.last_name, ins.first_name].filter(Boolean).join(' ').trim()
+                     || ins.licence;
+      const result = await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO convocation_poules
+             (tournoi_id, poule_number, licence, player_name, club,
+              location_name, location_address, start_time, player_order)
+           VALUES ($1, 1, $2, $3, $4, $5, '', '09:00', $6)
+           ON CONFLICT (tournoi_id, poule_number, licence) DO NOTHING`,
+          [tournoiId, ins.licence, playerName, ins.club || '',
+           tournament.lieu || '', i + 1],
+          function(err) { if (err) reject(err); else resolve(this.changes); }
+        );
+      });
+      if (result > 0) created++; else skipped++;
+    }
+
+    res.json({
+      success: true,
+      tournoi_id: tournoiId,
+      tournament_name: tournament.nom,
+      total_inscriptions: inscriptions.length,
+      created,
+      skipped,
+      message: created > 0
+        ? `${created} convocation(s) créée(s) (${skipped} déjà existante(s)). Le tournoi est prêt pour le Directeur de Jeu.`
+        : 'Toutes les convocations existaient déjà. Aucune modification.'
+    });
+  } catch (err) {
+    console.error('[quilles/send-convocations] error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -1039,6 +1039,12 @@
             actionButtons += `<button class="btn btn-small split-btn" data-tournoi-id="${tournoi.tournoi_id}" style="background: #e65100; padding: 5px 10px; font-size: 12px; margin-right: 5px; color: white;" title="Dédoubler sur 2 lieux">Dédoubler</button>`;
           }
           if (canEdit) {
+            // V 2.0.800 — Sprint 2 G: "Convoquer" button for Quilles tournaments
+            // (LBIF flow: skip the carambole pre-poules pipeline, just create
+            // convocation_poules rows so the DdJ pointage workflow can run).
+            if (!isCancelled && _isQuillesModeStr(tournoi.mode)) {
+              actionButtons += `<button class="btn btn-small quilles-convoquer-btn" data-tournoi-id="${tournoi.tournoi_id}" data-tournoi-name="${(tournoi.nom || '').replace(/"/g, '&quot;')}" style="background: #c8102e; color: white; padding: 5px 10px; font-size: 12px; margin-right: 5px;" title="Préparer les convocations LBIF (crée les entrées requises pour le pointage DdJ)">📋 Convoquer</button>`;
+            }
             actionButtons += `<button class="btn btn-small edit-tournoi-btn" style="background: #4CAF50; padding: 5px 10px; font-size: 12px; margin-right: 5px;">Modifier</button>`;
             if (!isCancelled) {
               actionButtons += `<button class="btn btn-small notify-tournoi-btn" data-tournoi-id="${tournoi.tournoi_id}" data-tournoi-name="${(tournoi.nom || '').replace(/"/g, '&quot;')}" data-tournoi-mode="${(tournoi.mode || '').replace(/"/g, '&quot;')}" data-tournoi-categorie="${(tournoi.categorie || '').replace(/"/g, '&quot;')}" data-tournoi-debut="${tournoi.debut || ''}" data-tournoi-lieu="${(tournoi.lieu || '').replace(/"/g, '&quot;')}" style="background: #f59e0b; color: white; padding: 5px 10px; font-size: 12px; margin-right: 5px;" title="Envoyer un message aux joueurs inscrits">📣 Message</button>`;
@@ -1077,6 +1083,9 @@
           if (unsplitBtn) unsplitBtn.onclick = (e) => { e.stopPropagation(); unsplitTournoi(tournoi.tournoi_id); };
           const notifyBtn = row.querySelector('.notify-tournoi-btn');
           if (notifyBtn) notifyBtn.onclick = (e) => { e.stopPropagation(); openNotifyModal(tournoi); };
+          // V 2.0.800 — Quilles pre-convocation button
+          const quillesBtn = row.querySelector('.quilles-convoquer-btn');
+          if (quillesBtn) quillesBtn.onclick = (e) => { e.stopPropagation(); quillesSendConvocations(tournoi.tournoi_id, tournoi.nom); };
         }
 
         // Render child rows for split tournaments
@@ -1100,6 +1109,32 @@
           });
         }
       });
+    }
+
+    // V 2.0.800 — Sprint 2 G: Quilles pre-convocations
+    async function quillesSendConvocations(tournoiId, name) {
+      if (!confirm(
+        `Préparer les convocations LBIF pour « ${name} » ?\n\n` +
+        `Cette action :\n` +
+        `  • Crée une entrée de convocation pour chaque joueur inscrit\n` +
+        `  • Permet au Directeur de Jeu de pointer les présents le jour J\n` +
+        `  • N'envoie PAS d'email automatique (à faire séparément si besoin)\n\n` +
+        `Idempotent : peut être relancé si de nouveaux joueurs s'inscrivent.`
+      )) return;
+
+      try {
+        const resp = await fetch(`${API_URL}/inscriptions/quilles/${tournoiId}/send-convocations`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur ' + resp.status);
+        const msg = data.message
+                 + (data.total_inscriptions ? `\n\n👥 ${data.total_inscriptions} joueur(s) inscrit(s) au total.` : '');
+        alert('✅ ' + msg);
+      } catch (e) {
+        alert('❌ ' + e.message);
+      }
     }
 
     async function deleteTournoi(tournoiId, name) {
