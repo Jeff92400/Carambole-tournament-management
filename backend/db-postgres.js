@@ -2501,6 +2501,18 @@ async function initializeDatabase() {
       ON CONFLICT (code) DO NOTHING
     `);
 
+    // V 2.0.782 — Remove Quilles categories from the categories table.
+    // Carambole tournaments use a (mode, category) pair (e.g. LIBRE / N2),
+    // but Quilles LBIF tournaments are open to all FFB ranks and use
+    // tournoi_ext.tournament_type for classification (régional / qualif_n1
+    // / finale_ligue). Any 5Q/9Q rows in categories are leftover from
+    // early V 2.0.768 trials and should be removed to clean up the
+    // Catégories admin screen. Idempotent: deletes nothing if no rows match.
+    await client.query(`
+      DELETE FROM categories
+      WHERE UPPER(game_type) IN ('5Q', '9Q', '5 QUILLES', '9 QUILLES', '5QUILLES', '9QUILLES')
+    `);
+
     // V 2.0.780 — Clean up duplicate Quilles game_modes rows.
     // The canonical rows are (code='5Q', display_name='5 Quilles') and
     // (code='9Q', display_name='9 Quilles'). Earlier manual inserts via
