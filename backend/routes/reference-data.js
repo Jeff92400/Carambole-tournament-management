@@ -652,6 +652,27 @@ router.get('/tournament-rounds', authenticateToken, (req, res) => {
   );
 });
 
+// ==================== QUILLES TOURNAMENT TYPES (V 2.0.783) ====================
+
+// Returns the active tournament types for Quilles (LBIF): régional,
+// qualif_n1, finale_ligue. Seeded in db-postgres.js. Frontend dropdown
+// in tournois-list.html loads this list dynamically rather than
+// hardcoding the values.
+router.get('/quilles-tournament-types', authenticateToken, (req, res) => {
+  const db = require('../db-loader');
+  db.all(
+    `SELECT code, display_name, display_order
+       FROM quilles_tournament_types
+      WHERE is_active = TRUE
+      ORDER BY display_order, display_name`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
 // ==================== USER ROLES ====================
 
 router.get('/user-roles', authenticateToken, (req, res) => {

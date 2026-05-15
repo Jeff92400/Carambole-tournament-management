@@ -2501,6 +2501,35 @@ async function initializeDatabase() {
       ON CONFLICT (code) DO NOTHING
     `);
 
+    // V 2.0.783 — Reference table for Quilles tournament types
+    // (régional / qualif_n1 / finale_ligue). Replaces the hardcoded
+    // dropdown options in the frontend with a properly seeded reference
+    // table — same pattern as game_modes / tournament_rounds. New LBIF
+    // tournament categories (e.g. "Coupe d'Europe") can be added via
+    // INSERT without code changes.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS quilles_tournament_types (
+        id SERIAL PRIMARY KEY,
+        code VARCHAR(30) NOT NULL UNIQUE,
+        display_name VARCHAR(80) NOT NULL,
+        display_order INTEGER DEFAULT 10,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    const qttSeed = [
+      ['regional',     'Régional',        1],
+      ['qualif_n1',    'Qualificatif N1', 2],
+      ['finale_ligue', 'Finale de Ligue', 3]
+    ];
+    for (const [code, name, order] of qttSeed) {
+      await client.query(
+        `INSERT INTO quilles_tournament_types (code, display_name, display_order)
+         VALUES ($1, $2, $3) ON CONFLICT (code) DO NOTHING`,
+        [code, name, order]
+      );
+    }
+
     // V 2.0.782 — Remove Quilles categories from the categories table.
     // Carambole tournaments use a (mode, category) pair (e.g. LIBRE / N2),
     // but Quilles LBIF tournaments are open to all FFB ranks and use

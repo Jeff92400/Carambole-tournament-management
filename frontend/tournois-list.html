@@ -389,14 +389,11 @@
                   <p style="margin: 4px 0 0; font-size: 11px; color: #666;">Sert au calcul de la distance via la matrice (cellule [tables × nb_poules]).</p>
                 </div>
 
-                <!-- Tournament type (Quilles only) -->
+                <!-- Tournament type (Quilles only) — populated dynamically from /api/reference-data/quilles-tournament-types -->
                 <div>
                   <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Type de tournoi</label>
                   <select id="create_tournament_type" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                     <option value="">-- Standard --</option>
-                    <option value="regional">Régional</option>
-                    <option value="qualif_n1">Qualificatif N1</option>
-                    <option value="finale_ligue">Finale de Ligue</option>
                   </select>
                 </div>
 
@@ -1675,6 +1672,26 @@
           if (r.ok) _quillesMatrices = await r.json();
         } catch (e) {
           console.warn('[Quilles] could not load matrices:', e);
+        }
+
+        // V 2.0.783 — Load Quilles tournament types from reference table
+        // (replaces previously hardcoded options in the HTML).
+        try {
+          const r = await fetch(`${API_URL}/reference-data/quilles-tournament-types`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (r.ok) {
+            const types = await r.json();
+            ['create_tournament_type'].forEach(selId => {
+              const sel = document.getElementById(selId);
+              if (sel) {
+                sel.innerHTML = '<option value="">-- Standard --</option>' +
+                  types.map(t => `<option value="${t.code}">${t.display_name}</option>`).join('');
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('[Quilles] could not load tournament types:', e);
         }
       }
 
