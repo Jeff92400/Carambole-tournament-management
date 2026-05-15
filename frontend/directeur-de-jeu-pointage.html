@@ -355,6 +355,7 @@
   <script src="js/auth-utils.js?v=197"></script>
   <script src="js/app-branding.js?v=216"></script>
   <script src="js/ddj-step-nav.js?v=3"></script>
+  <script src="js/quilles-banner.js?v=1"></script>
   <script src="js/dj-v3.js?v=9"></script>
   <script>
     const API_URL = '/api';
@@ -508,6 +509,9 @@
     function render() {
       const t = state.tournament;
       const p = state.players;
+
+      // V 2.0.790 — Render Quilles banner above the header (no-op for carambole)
+      if (typeof renderQuillesBanner === 'function') renderQuillesBanner(t);
 
       // Header
       document.getElementById('tournamentTitle').textContent =

@@ -69,9 +69,12 @@ router.get('/competitions', authenticateToken, requireDdJ, (req, res) => {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const historyStart = sevenDaysAgo.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
 
+  // V 2.0.790 — Quilles fields added to the SELECT so the competitions
+  // dashboard can flag Quilles tournaments with the LBIF colour theme.
   const query = `
     SELECT t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu, t.lieu_2,
            t.is_split, t.tournament_number, t.status,
+           t.tournament_format, t.tournament_type, t.tour_number,
            COUNT(DISTINCT cp.licence) as convoque_count,
            COUNT(DISTINCT CASE WHEN i.forfait = 1 THEN i.licence END) as forfait_count,
            COUNT(DISTINCT CASE WHEN i.inscription_id IS NOT NULL
@@ -86,7 +89,8 @@ router.get('/competitions', authenticateToken, requireDdJ, (req, res) => {
       AND t.parent_tournoi_id IS NULL
       AND LOWER(COALESCE(t.status, 'active')) != 'cancelled'
     GROUP BY t.tournoi_id, t.nom, t.mode, t.categorie, t.debut, t.lieu, t.lieu_2,
-             t.is_split, t.tournament_number, t.status
+             t.is_split, t.tournament_number, t.status,
+             t.tournament_format, t.tournament_type, t.tour_number
     ORDER BY t.debut DESC, t.mode, t.categorie
   `;
 
@@ -139,10 +143,18 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
 
   try {
     // 1. Tournament info (org-scoped)
+    // V 2.0.790 — Quilles fields (tournament_format / tournament_type /
+    // tour_number / distance_matrix_id / fixed_distance / nb_tables) added
+    // to the SELECT so the DdJ frontend can render the LBIF banner and
+    // adapt its workflow on the fly. Carambole tournaments have these
+    // columns as null and the frontend renders the carambole layout
+    // unchanged.
     const tournament = await new Promise((resolve, reject) => {
       db.get(
         `SELECT tournoi_id, nom, mode, categorie, debut, lieu, lieu_2,
-                tournament_number, status
+                tournament_number, status,
+                tournament_format, tournament_type, tour_number,
+                distance_matrix_id, fixed_distance, nb_tables
          FROM tournoi_ext
          WHERE tournoi_id = $1
            AND ($2::int IS NULL OR organization_id = $2)`,
