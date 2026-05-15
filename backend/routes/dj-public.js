@@ -60,9 +60,14 @@ router.get('/:tournoi_id/feed', async (req, res) => {
   try {
     // 1. Tournament identity (also serves as the org check — the loaders
     //    are called with orgId=null since we already validated here).
+    // V 2.0.810 — Sprint 2 D.4 follow-up: include `mode` so the TV display
+    // can detect Quilles tournaments (no consolante, 2-column layout).
+    // The two res.json branches below read tournament.mode; without it in
+    // the SELECT the field was always null and the frontend never branched
+    // to the Quilles layout.
     const tournament = await new Promise((resolve, reject) => {
       db.get(
-        `SELECT t.tournoi_id, t.nom, t.debut, t.lieu, t.organization_id
+        `SELECT t.tournoi_id, t.nom, t.mode, t.debut, t.lieu, t.organization_id
            FROM tournoi_ext t
           WHERE t.tournoi_id = $1`,
         [tournoiId],
