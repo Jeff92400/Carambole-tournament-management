@@ -481,6 +481,29 @@
       pendingByLicence: new Map()
     };
 
+    // V 2.0.801 — Sprint 2 G follow-up: lets the DdJ trigger Quilles
+    // pre-convocations directly from the pointage empty state, without
+    // having to navigate back to the admin tournament list. Calls the
+    // same endpoint as the "📋 Convoquer" button on tournois-list.html.
+    async function quillesPrepareConvocations(tournoiId) {
+      const btn = document.getElementById('quillesPrepareBtn');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Préparation...'; }
+      try {
+        const resp = await fetch(`${API_URL}/inscriptions/quilles/${tournoiId}/send-convocations`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur ' + resp.status);
+        alert(`✅ ${data.message}`);
+        // Reload the page so the players appear in the pointage list.
+        await loadPointage();
+      } catch (e) {
+        alert(`❌ ${e.message}`);
+        if (btn) { btn.disabled = false; btn.textContent = '📋 Préparer les convocations maintenant'; }
+      }
+    }
+
     async function loadPointage() {
       try {
         const fetchFn = typeof authFetch === 'function' ? authFetch : (url, opts) => {
@@ -527,14 +550,41 @@
 
       // Empty state
       if (p.length === 0) {
-        document.getElementById('pointageContent').innerHTML = `
-          <div class="ddj-empty">
-            <img src="images/FrenchBillard-Icon-small.png" alt="">
-            <p>Aucun joueur convoqué pour ce tournoi.</p>
-            <p style="margin-top: 10px; font-size: 0.9em;">
-              Le pointage nécessite que l'administrateur ait envoyé les convocations au préalable.
-            </p>
-          </div>`;
+        // V 2.0.801 — Quilles tournaments use a simpler convocation flow than
+        // carambole (no per-category pre-poules); admins can trigger it
+        // directly from the DdJ pointage page when they realise convocations
+        // weren't generated. For carambole, the convocation must be done via
+        // the dedicated admin page (no shortcut here — different UX entirely).
+        const isQuilles = typeof isQuillesMode === 'function' && isQuillesMode(t.mode);
+        if (isQuilles) {
+          document.getElementById('pointageContent').innerHTML = `
+            <div class="ddj-empty">
+              <img src="images/quilles/quilles-icon.png" alt=""
+                   style="height: 64px; width: 64px; border-radius: 8px; object-fit: cover;"
+                   onerror="this.src='images/FrenchBillard-Icon-small.png';">
+              <p style="font-weight: 600; margin-top: 12px;">Aucun joueur convoqué pour ce tournoi Quilles.</p>
+              <p style="margin-top: 8px; font-size: 0.9em; color: #555;">
+                Préparez les convocations à partir des joueurs inscrits pour pouvoir démarrer le pointage.
+              </p>
+              <button id="quillesPrepareBtn"
+                      style="margin-top: 18px; padding: 12px 22px; background: linear-gradient(135deg, #c8102e 0%, #8b0000 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 6px rgba(200, 16, 46, 0.3);"
+                      onclick="quillesPrepareConvocations(${t.tournoi_id})">
+                📋 Préparer les convocations maintenant
+              </button>
+              <p style="margin-top: 14px; font-size: 0.78em; color: #888;">
+                Idempotent : peut être relancé si de nouveaux joueurs s'inscrivent.
+              </p>
+            </div>`;
+        } else {
+          document.getElementById('pointageContent').innerHTML = `
+            <div class="ddj-empty">
+              <img src="images/FrenchBillard-Icon-small.png" alt="">
+              <p>Aucun joueur convoqué pour ce tournoi.</p>
+              <p style="margin-top: 10px; font-size: 0.9em;">
+                Le pointage nécessite que l'administrateur ait envoyé les convocations au préalable.
+              </p>
+            </div>`;
+        }
         return;
       }
 
