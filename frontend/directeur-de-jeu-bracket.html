@@ -856,11 +856,17 @@
         else { col1Class += ' draw'; col2Class += ' draw'; }
       }
 
+      // V 2.0.797 — Sprint 2 D.4: Quilles strip shows only the distance
+      // (no reprises max). Same isQuillesMode() helper as the matchs page.
       const dist = state.gameParams.distance;
       const rep = state.gameParams.reprises;
-      const paramStrip = (dist || rep)
-        ? `<div class="match-params-strip">🎯 Distance : ${dist ?? '?'} pts · Reprises max : ${rep ?? '?'}</div>`
-        : '';
+      const isQuillesT = typeof isQuillesMode === 'function'
+        && isQuillesMode(state.bracket && state.bracket.tournament && state.bracket.tournament.mode);
+      const paramStrip = isQuillesT
+        ? (dist ? `<div class="match-params-strip" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #c8102e;">🎯 Distance Quilles : ${dist} pts (match terminé quand le vainqueur atteint ce score)</div>` : '')
+        : ((dist || rep)
+            ? `<div class="match-params-strip">🎯 Distance : ${dist ?? '?'} pts · Reprises max : ${rep ?? '?'}</div>`
+            : '');
 
       const m1 = (phase.p1_points != null && phase.p1_reprises > 0) ? (phase.p1_points / phase.p1_reprises) : null;
       const m2 = (phase.p2_points != null && phase.p2_reprises > 0) ? (phase.p2_points / phase.p2_reprises) : null;
@@ -916,6 +922,7 @@
                 <div class="score-row"><span class="score-label">Points :</span>
                   <input type="number" class="score-input" data-field="p1_points" inputmode="numeric" min="0"${maxPts}
                     value="${phase.p1_points != null ? phase.p1_points : ''}"></div>
+                ${isQuillesT ? '' : `
                 <div class="score-row"><span class="score-label">Reprises :</span>
                   <input type="number" class="score-input" data-field="p1_reprises" inputmode="numeric" min="0"${maxRep}
                     value="${phase.p1_reprises != null ? phase.p1_reprises : ''}"></div>
@@ -923,12 +930,14 @@
                   <input type="number" class="score-input" data-field="p1_serie" inputmode="numeric" min="0"${maxPts}
                     value="${phase.p1_serie != null ? phase.p1_serie : ''}"></div>
                 <div class="match-moyenne" data-role="moyenne-p1">Moyenne : <span class="val">${formatMoyenne(m1)}</span></div>
+                `}
               </div>
               <div class="${col2Class}" data-side="p2">
                 <div class="score-col-header">${escapeHtml(phase.p2.player_name)}</div>
                 <div class="score-row"><span class="score-label">Points :</span>
                   <input type="number" class="score-input" data-field="p2_points" inputmode="numeric" min="0"${maxPts}
                     value="${phase.p2_points != null ? phase.p2_points : ''}"></div>
+                ${isQuillesT ? '' : `
                 <div class="score-row"><span class="score-label">Reprises :</span>
                   <input type="number" class="score-input" data-field="p2_reprises" inputmode="numeric" min="0"${maxRep}
                     value="${phase.p2_reprises != null ? phase.p2_reprises : ''}"></div>
@@ -936,6 +945,7 @@
                   <input type="number" class="score-input" data-field="p2_serie" inputmode="numeric" min="0"${maxPts}
                     value="${phase.p2_serie != null ? phase.p2_serie : ''}"></div>
                 <div class="match-moyenne" data-role="moyenne-p2">Moyenne : <span class="val">${formatMoyenne(m2)}</span></div>
+                `}
               </div>
             </div>
             <!-- V 2.0.692 — DdJ V3 : champs arbitre (optionnels) -->
@@ -1060,10 +1070,22 @@
       const card = document.querySelector(`.phase-card[data-phase="${phase}"]`);
       if (!card) return;
       const payload = { phase };
+      // V 2.0.797 — Sprint 2 D.4: guard each lookup with a null check —
+      // reprises/série inputs are not rendered for Quilles bracket phases.
       ['p1_points', 'p1_reprises', 'p1_serie', 'p2_points', 'p2_reprises', 'p2_serie'].forEach(f => {
         const input = card.querySelector(`[data-field="${f}"]`);
+        if (!input) { payload[f] = null; return; }
         payload[f] = input.value === '' ? null : parseInt(input.value, 10);
       });
+
+      // V 2.0.797 — Quilles: derive points_subis symmetrically (same logic
+      // as the matchs page V 2.0.793).
+      const isQuillesSave = typeof isQuillesMode === 'function'
+        && isQuillesMode(state.bracket && state.bracket.tournament && state.bracket.tournament.mode);
+      if (isQuillesSave) {
+        payload.p1_points_subis = payload.p2_points;
+        payload.p2_points_subis = payload.p1_points;
+      }
       if ((payload.p1_points != null) !== (payload.p2_points != null)) {
         showSaveStatus('Renseignez les points des deux joueurs', 'error');
         return;

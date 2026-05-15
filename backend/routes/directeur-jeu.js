@@ -2110,11 +2110,13 @@ async function loadBracket(db, orgId, tournoiId) {
   // Fetch any saved bracket match rows
   // V 2.0.698 — also pull started_at / finished_at so the UI can show the
   // "▶ Match commencé" button vs "⏳ En cours" badge vs "✓ Terminé".
+  // V 2.0.797 — Sprint 2 D.4: p1_points_subis / p2_points_subis added to
+  // the bracket SELECT (Quilles-only fields seeded V 2.0.768).
   const savedRows = await new Promise((resolve, reject) => {
     db.all(
       `SELECT id, phase, table_number, p1_licence, p2_licence,
-              p1_points, p1_reprises, p1_serie,
-              p2_points, p2_reprises, p2_serie,
+              p1_points, p1_reprises, p1_serie, p1_points_subis,
+              p2_points, p2_reprises, p2_serie, p2_points_subis,
               referee_name, referee_licence,
               entered_at, started_at, finished_at
        FROM ddj_bracket_matches
@@ -2147,9 +2149,11 @@ async function loadBracket(db, orgId, tournoiId) {
       p1_points: saved ? saved.p1_points : null,
       p1_reprises: saved ? saved.p1_reprises : null,
       p1_serie: saved ? saved.p1_serie : null,
+      p1_points_subis: saved ? saved.p1_points_subis : null,
       p2_points: saved ? saved.p2_points : null,
       p2_reprises: saved ? saved.p2_reprises : null,
       p2_serie: saved ? saved.p2_serie : null,
+      p2_points_subis: saved ? saved.p2_points_subis : null,
       // V 2.0.707 — expose persisted referee for UI pre-fill
       referee_name: saved ? saved.referee_name : null,
       referee_licence: saved ? saved.referee_licence : null,
@@ -2754,7 +2758,12 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
     return res.status(400).json({ error: 'Phase invalide' });
   }
 
-  const scoreFields = ['p1_points', 'p1_reprises', 'p1_serie', 'p2_points', 'p2_reprises', 'p2_serie'];
+  // V 2.0.797 — Sprint 2 D.4: p1_points_subis / p2_points_subis added for
+  // Quilles matches in the bracket (same shape as the poule PUT in D.3).
+  const scoreFields = [
+    'p1_points', 'p1_reprises', 'p1_serie', 'p1_points_subis',
+    'p2_points', 'p2_reprises', 'p2_serie', 'p2_points_subis'
+  ];
   const parsed = {};
   for (const f of scoreFields) {
     const v = b[f];
@@ -2814,31 +2823,34 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
     const refereeLicence = (b.referee_licence || '').trim() || null;
 
     // UPSERT
+    // V 2.0.797 — p1_points_subis / p2_points_subis added for Quilles bracket
+    // matches. Null for carambole bracket matches.
     await new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO ddj_bracket_matches
            (tournoi_id, phase, table_number,
             p1_licence, p2_licence,
-            p1_points, p1_reprises, p1_serie,
-            p2_points, p2_reprises, p2_serie,
+            p1_points, p1_reprises, p1_serie, p1_points_subis,
+            p2_points, p2_reprises, p2_serie, p2_points_subis,
             entered_at, entered_by,
             referee_name, referee_licence,
             started_at, finished_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                 CURRENT_TIMESTAMP, $12, $13, $14,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                 CURRENT_TIMESTAMP, $14, $15, $16,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, phase)
          DO UPDATE SET
-           -- V 2.0.700 — preserve existing table_number (see poule PUT comment)
            table_number = COALESCE(EXCLUDED.table_number, ddj_bracket_matches.table_number),
            p1_licence = EXCLUDED.p1_licence,
            p2_licence = EXCLUDED.p2_licence,
            p1_points = EXCLUDED.p1_points,
            p1_reprises = EXCLUDED.p1_reprises,
            p1_serie = EXCLUDED.p1_serie,
+           p1_points_subis = EXCLUDED.p1_points_subis,
            p2_points = EXCLUDED.p2_points,
            p2_reprises = EXCLUDED.p2_reprises,
            p2_serie = EXCLUDED.p2_serie,
+           p2_points_subis = EXCLUDED.p2_points_subis,
            entered_at = CURRENT_TIMESTAMP,
            entered_by = EXCLUDED.entered_by,
            referee_name = EXCLUDED.referee_name,
@@ -2848,8 +2860,8 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
         [
           tournoiId, phase, tableNumber,
           match.p1.licence, match.p2.licence,
-          parsed.p1_points, parsed.p1_reprises, parsed.p1_serie,
-          parsed.p2_points, parsed.p2_reprises, parsed.p2_serie,
+          parsed.p1_points, parsed.p1_reprises, parsed.p1_serie, parsed.p1_points_subis,
+          parsed.p2_points, parsed.p2_reprises, parsed.p2_serie, parsed.p2_points_subis,
           req.user.userId || null,
           refereeName, refereeLicence
         ],
@@ -3037,11 +3049,13 @@ async function loadConsolante(db, orgId, tournoiId) {
 
   // Fetch saved rows
   // V 2.0.698 — pull started_at / finished_at for the "Match commencé" UX
+  // V 2.0.797 — Sprint 2 D.4: p1_points_subis / p2_points_subis added to
+  // the consolante SELECT (Quilles-only fields).
   const savedRows = await new Promise((resolve, reject) => {
     db.all(
       `SELECT id, phase, table_number, p1_licence, p2_licence,
-              p1_points, p1_reprises, p1_serie,
-              p2_points, p2_reprises, p2_serie,
+              p1_points, p1_reprises, p1_serie, p1_points_subis,
+              p2_points, p2_reprises, p2_serie, p2_points_subis,
               referee_name, referee_licence,
               entered_at, started_at, finished_at
          FROM ddj_consolante_matches
@@ -3071,9 +3085,11 @@ async function loadConsolante(db, orgId, tournoiId) {
       p1_points: saved ? saved.p1_points : null,
       p1_reprises: saved ? saved.p1_reprises : null,
       p1_serie: saved ? saved.p1_serie : null,
+      p1_points_subis: saved ? saved.p1_points_subis : null,
       p2_points: saved ? saved.p2_points : null,
       p2_reprises: saved ? saved.p2_reprises : null,
       p2_serie: saved ? saved.p2_serie : null,
+      p2_points_subis: saved ? saved.p2_points_subis : null,
       // V 2.0.707 — expose persisted referee for UI pre-fill
       referee_name: saved ? saved.referee_name : null,
       referee_licence: saved ? saved.referee_licence : null,
@@ -3253,10 +3269,12 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
   const db = getDb();
   const orgId = req.user.organizationId || null;
   const tournoiId = parseInt(req.params.id, 10);
+  // V 2.0.797 — Sprint 2 D.4: p1_points_subis / p2_points_subis added for
+  // Quilles consolante matches.
   const {
     phase, table_number,
-    p1_points, p1_reprises, p1_serie,
-    p2_points, p2_reprises, p2_serie
+    p1_points, p1_reprises, p1_serie, p1_points_subis,
+    p2_points, p2_reprises, p2_serie, p2_points_subis
   } = req.body || {};
 
   if (!Number.isFinite(tournoiId)) {
@@ -3292,25 +3310,26 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
       db.run(
         `INSERT INTO ddj_consolante_matches
            (tournoi_id, phase, table_number, p1_licence, p2_licence,
-            p1_points, p1_reprises, p1_serie,
-            p2_points, p2_reprises, p2_serie,
+            p1_points, p1_reprises, p1_serie, p1_points_subis,
+            p2_points, p2_reprises, p2_serie, p2_points_subis,
             entered_at, entered_by,
             referee_name, referee_licence,
             started_at, finished_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                 CURRENT_TIMESTAMP, $12, $13, $14,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                 CURRENT_TIMESTAMP, $14, $15, $16,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, phase) DO UPDATE SET
-           -- V 2.0.700 — preserve existing table_number (see poule PUT comment)
            table_number = COALESCE(EXCLUDED.table_number, ddj_consolante_matches.table_number),
            p1_licence   = EXCLUDED.p1_licence,
            p2_licence   = EXCLUDED.p2_licence,
            p1_points    = EXCLUDED.p1_points,
            p1_reprises  = EXCLUDED.p1_reprises,
            p1_serie     = EXCLUDED.p1_serie,
+           p1_points_subis = EXCLUDED.p1_points_subis,
            p2_points    = EXCLUDED.p2_points,
            p2_reprises  = EXCLUDED.p2_reprises,
            p2_serie     = EXCLUDED.p2_serie,
+           p2_points_subis = EXCLUDED.p2_points_subis,
            entered_at   = CURRENT_TIMESTAMP,
            entered_by   = EXCLUDED.entered_by,
            referee_name = EXCLUDED.referee_name,
@@ -3320,8 +3339,8 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
         [
           tournoiId, phase, table_number || null,
           target.p1.licence, target.p2.licence,
-          p1_points ?? null, p1_reprises ?? null, p1_serie ?? null,
-          p2_points ?? null, p2_reprises ?? null, p2_serie ?? null,
+          p1_points ?? null, p1_reprises ?? null, p1_serie ?? null, p1_points_subis ?? null,
+          p2_points ?? null, p2_reprises ?? null, p2_serie ?? null, p2_points_subis ?? null,
           req.user.userId || null,
           refereeName, refereeLicence
         ],
