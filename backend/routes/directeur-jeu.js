@@ -657,9 +657,18 @@ router.put('/competitions/:id/checkin/:licence', authenticateToken, requireDdJ, 
  */
 async function loadPointageForSerpentine(db, orgId, tournoiId) {
   // Tournament info (needed for mode + season resolution)
+  // V 2.0.804 — Sprint 2 D.2 fix: include Quilles columns
+  // (distance_matrix_id, fixed_distance, nb_tables, organization_id) so the
+  // resolveDistance() validation in /poules/generate doesn't think the
+  // tournament has no matrix when in fact the DB has one. Without these
+  // columns in the SELECT, the tournament object passed to resolveDistance
+  // had matrix_id=undefined → fell into the "5Q has no distance_matrix_id"
+  // branch even though the matrix was properly assigned.
   const tournament = await new Promise((resolve, reject) => {
     db.get(
-      `SELECT tournoi_id, nom, mode, categorie, debut
+      `SELECT tournoi_id, nom, mode, categorie, debut, organization_id,
+              tournament_format, tournament_type, tour_number,
+              distance_matrix_id, fixed_distance, nb_tables
        FROM tournoi_ext
        WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
       [tournoiId, orgId],
