@@ -2166,6 +2166,34 @@
       <div id="qualificationMessage" style="display: none; margin-top: 15px; padding: 10px; border-radius: 4px;"></div>
     </div>
 
+    <!-- V 2.0.770 — Matrices de distance Quilles (visible only when Quilles module enabled) -->
+    <div class="accordion-panel admin-only" id="quillesMatricesSection" data-settings-tab="competitions" style="display: none;">
+      <div class="accordion-header" onclick="toggleAccordion('quillesMatricesSection')">
+        <div class="accordion-title"><span class="accordion-icon">&#9654;</span><strong>🎱 Matrices de distance Quilles (5Q)</strong></div>
+        <span class="accordion-summary" id="summary-quilles-matrices">Chargement…</span>
+      </div>
+      <div class="accordion-body">
+        <p style="margin-bottom: 16px; color: #555; font-size: 14px;">
+          Les matrices définissent la <strong>distance de jeu</strong> (nombre de points pour gagner un match) en fonction du <strong>nombre de tables disponibles</strong> et du <strong>nombre de poules</strong> du tournoi 5 Quilles. Le 9 Quilles utilise une distance fixe (400 points) configurée directement sur le tournoi — pas besoin de matrice.
+        </p>
+        <p style="margin-bottom: 16px; color: #555; font-size: 13px;">
+          Versionnez vos matrices avec <code>active_from</code> / <code>active_to</code> pour suivre les évolutions du règlement LBIF en cours de saison sans casser les tournois historiques.
+        </p>
+
+        <div id="quillesMatricesList" style="margin-top: 16px;">
+          <!-- Liste des matrices, chargée dynamiquement -->
+          <div style="text-align: center; padding: 20px; color: #999;">Chargement…</div>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center;">
+          <button onclick="openMatrixEditor()" class="btn" style="background: #c8102e; padding: 10px 20px; color: white;">
+            + Créer une nouvelle matrice
+          </button>
+          <span style="color: #999; font-size: 12px; font-style: italic;">L'éditeur de grille s'ouvre dans un modal (étape A3 — disponible bientôt)</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Politique de Confidentialité Section - Admin Only -->
     <div class="accordion-panel admin-only" id="privacyPolicySection" data-settings-tab="organisation">
       <div class="accordion-header" onclick="toggleAccordion('privacyPolicySection')">
@@ -6902,8 +6930,104 @@
       }
     }
 
-    loadQualificationSettings();
+    loadQualificationSettings().then(() => {
+      // V 2.0.770 — Charge la section Quilles APRÈS que loadQualificationSettings
+      // ait positionné l'état du checkbox enableQuillesModule depuis la DB.
+      refreshQuillesSection();
+    });
     loadPushTestLicences();
+
+    // V 2.0.770 — Toggle visibilité de la section "Matrices de distance Quilles"
+    // selon l'état du flag enable_quilles_module + chargement de la liste.
+    async function refreshQuillesSection() {
+      const section = document.getElementById('quillesMatricesSection');
+      const checkbox = document.getElementById('enableQuillesModule');
+      if (!section) return;
+
+      const enabled = checkbox && checkbox.checked;
+      section.style.display = enabled ? '' : 'none';
+      if (!enabled) return;
+
+      // Charger la liste des matrices
+      try {
+        const resp = await fetch(`${API_URL}/settings/distance-matrices`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error('Erreur chargement matrices');
+        const matrices = await resp.json();
+
+        const container = document.getElementById('quillesMatricesList');
+        const summary = document.getElementById('summary-quilles-matrices');
+
+        if (!matrices.length) {
+          container.innerHTML = `
+            <div style="padding: 20px; background: #fef9e7; border: 1px dashed #f1c40f; border-radius: 8px; text-align: center; color: #7d6608;">
+              <p style="margin: 0; font-size: 14px;">📋 Aucune matrice configurée pour cette organisation.</p>
+              <p style="margin: 8px 0 0; font-size: 12px;">Cliquez sur « Créer une nouvelle matrice » ci-dessous pour ajouter la première (typiquement la matrice LBIF 5Q version courante).</p>
+            </div>`;
+          if (summary) summary.textContent = 'Aucune matrice';
+          return;
+        }
+
+        // Render list
+        container.innerHTML = matrices.map(m => {
+          const periodFrom = m.active_from ? new Date(m.active_from).toLocaleDateString('fr-FR') : '—';
+          const periodTo = m.active_to ? new Date(m.active_to).toLocaleDateString('fr-FR') : 'en cours';
+          const cellCount = m.matrix_data && typeof m.matrix_data === 'object'
+            ? Object.values(m.matrix_data).reduce((acc, row) => acc + (row && typeof row === 'object' ? Object.keys(row).length : 0), 0)
+            : 0;
+          return `
+            <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; background: white;">
+              <div style="flex: 1;">
+                <div style="font-weight: 600; color: #c8102e; font-size: 14px;">${escapeHtml(m.name)}</div>
+                <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                  ${m.game_mode_display ? '🎯 ' + escapeHtml(m.game_mode_display) : ''} ·
+                  ${m.version ? '📌 ' + escapeHtml(m.version) : 'sans version'} ·
+                  📅 ${periodFrom} → ${periodTo} ·
+                  📊 ${cellCount} cellule(s)
+                </div>
+              </div>
+              <button onclick="openMatrixEditor(${m.id})" class="btn" style="padding: 6px 12px; font-size: 12px; background: #1F4788; color: white;">Éditer</button>
+              <button onclick="deleteMatrix(${m.id}, '${escapeHtml(m.name).replace(/'/g, '&#39;')}')" class="btn" style="padding: 6px 12px; font-size: 12px; background: #dc3545; color: white;">Supprimer</button>
+            </div>`;
+        }).join('');
+
+        if (summary) summary.textContent = `${matrices.length} matrice${matrices.length > 1 ? 's' : ''}`;
+      } catch (e) {
+        console.error('[Quilles matrices] error:', e);
+        const container = document.getElementById('quillesMatricesList');
+        if (container) {
+          container.innerHTML = `<div style="padding: 20px; background: #fde8e8; border-radius: 8px; color: #c0392b;">❌ Erreur de chargement des matrices : ${e.message}</div>`;
+        }
+      }
+    }
+
+    // Stub: A3 will implement the actual grid editor modal
+    function openMatrixEditor(matrixId) {
+      alert(`📋 Éditeur matrice ${matrixId ? '(id ' + matrixId + ')' : '(nouvelle)'} — disponible à l'étape A3.\n\nPour tester maintenant, utiliser l'API directement via la console :\nPOST /api/settings/distance-matrices`);
+    }
+
+    async function deleteMatrix(id, name) {
+      if (!confirm(`Supprimer la matrice « ${name} » ?\n\nCette action est définitive.`)) return;
+      try {
+        const resp = await fetch(`${API_URL}/settings/distance-matrices/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `Erreur ${resp.status}`);
+        await refreshQuillesSection();
+        alert('✅ Matrice supprimée.');
+      } catch (e) {
+        alert(`❌ Erreur : ${e.message}`);
+      }
+    }
+
+    // Re-check Quilles section visibility when the toggle changes
+    const quillesCheckbox = document.getElementById('enableQuillesModule');
+    if (quillesCheckbox) {
+      quillesCheckbox.addEventListener('change', () => setTimeout(refreshQuillesSection, 100));
+    }
 
     // Bonus Moyenne toggle
     document.getElementById('bonusMoyenneEnabled').addEventListener('change', function() {
