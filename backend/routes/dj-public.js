@@ -295,7 +295,10 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       tournament: {
         name: tournament.nom,
         date: tournament.debut,
-        location: tournament.lieu || null
+        location: tournament.lieu || null,
+        // V 2.0.806 — mode exposed so the TV layout can branch on Quilles
+        // (no consolante: switch to a 2-column Poules | Phase finale layout).
+        mode: tournament.mode || null
       },
       session: {
         table_count: session.table_count,

@@ -707,9 +707,28 @@
     // V 2.0.745 — Two layout branches depending on mode:
     //   single_poule → 2 columns (standings | matches), no bracket/consolante
     //   bracket      → existing 3-column layout unchanged
+    // V 2.0.806 — Quilles tournaments have no consolante (LBIF règlement):
+    //   the non-qualifiers are ex-aequo, no classification matches. Switch
+    //   the layout to 2 columns (Poules | Phase finale) to avoid an empty
+    //   "Matchs de classement" column on the TV.
+    const tournamentMode = (data.tournament && data.tournament.mode || '').toUpperCase();
+    const isQuillesTv = tournamentMode === '5Q' || tournamentMode === '9Q'
+                    || tournamentMode === '5 QUILLES' || tournamentMode === '9 QUILLES';
     if (data.mode === 'single_poule') {
       $('t-main').style.gridTemplateColumns = '1fr 1fr';
       $('t-main').innerHTML = renderPouleSingle((data.poules || [])[0]);
+    } else if (isQuillesTv) {
+      // Quilles: 2 columns (Poules | Phase finale), no consolante
+      $('t-main').style.gridTemplateColumns = '1.4fr 1.6fr';
+      $('t-main').innerHTML = `
+        <div class="col">
+          <div class="col-title">Poules</div>
+          <div class="col-body">${(data.poules || []).map(renderPoule).join('')}</div>
+        </div>
+        <div class="col">
+          <div class="col-title">Phase finale</div>
+          <div class="col-body">${renderBracket(data.bracket)}</div>
+        </div>`;
     } else {
       $('t-main').style.gridTemplateColumns = ''; // reset to CSS default (1.3fr 1.7fr 1.2fr)
       $('t-main').innerHTML = `
