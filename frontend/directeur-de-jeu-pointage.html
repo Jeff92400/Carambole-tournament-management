@@ -550,13 +550,14 @@
 
       // Empty state
       if (p.length === 0) {
-        // V 2.0.801 — Quilles tournaments use a simpler convocation flow than
-        // carambole (no per-category pre-poules); admins can trigger it
-        // directly from the DdJ pointage page when they realise convocations
-        // weren't generated. For carambole, the convocation must be done via
-        // the dedicated admin page (no shortcut here — different UX entirely).
+        // V 2.0.802 — Quilles admin-only recovery button.
+        // The shortcut "Préparer les convocations" is admin-only because
+        // initiating convocations is an admin-tier action (separation of
+        // duties — DdJ is a tournament-day role). Non-admins (DdJ) see a
+        // clear message asking them to contact the admin.
         const isQuilles = typeof isQuillesMode === 'function' && isQuillesMode(t.mode);
-        if (isQuilles) {
+        const isAdminUser = sessionStorage.getItem('userRole') === 'admin';
+        if (isQuilles && isAdminUser) {
           document.getElementById('pointageContent').innerHTML = `
             <div class="ddj-empty">
               <img src="images/quilles/quilles-icon.png" alt=""
@@ -575,7 +576,21 @@
                 Idempotent : peut être relancé si de nouveaux joueurs s'inscrivent.
               </p>
             </div>`;
+        } else if (isQuilles) {
+          // DdJ on a Quilles tournament without convocations: explain and stop.
+          document.getElementById('pointageContent').innerHTML = `
+            <div class="ddj-empty">
+              <img src="images/quilles/quilles-icon.png" alt=""
+                   style="height: 64px; width: 64px; border-radius: 8px; object-fit: cover;"
+                   onerror="this.src='images/FrenchBillard-Icon-small.png';">
+              <p style="font-weight: 600; margin-top: 12px;">Aucun joueur convoqué pour ce tournoi Quilles.</p>
+              <p style="margin-top: 8px; font-size: 0.9em; color: #555;">
+                Demandez à l'administrateur de préparer les convocations
+                (bouton « 📋 Convoquer » dans la liste des tournois) avant de démarrer le pointage.
+              </p>
+            </div>`;
         } else {
+          // Carambole (admin or DdJ): standard message.
           document.getElementById('pointageContent').innerHTML = `
             <div class="ddj-empty">
               <img src="images/FrenchBillard-Icon-small.png" alt="">

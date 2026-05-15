@@ -5230,12 +5230,13 @@ router.get('/tournoi/:id/children', authenticateToken, async (req, res) => {
 //   convocation email template will land in a follow-up.
 // ============================================================================
 router.post('/quilles/:tournoiId/send-convocations', authenticateToken, async (req, res) => {
-  // V 2.0.801 — Allow both admin and DdJ to trigger Quilles convocations.
-  // The DdJ pointage page exposes the same action via an "empty state"
-  // button when no convocation_poules exist yet (recovery path).
-  const role = req.user?.role;
-  if (role !== 'admin' && role !== 'directeur_jeu') {
-    return res.status(403).json({ error: 'Admin or DdJ access required' });
+  // V 2.0.802 — Admin only. Per Jeff's separation-of-duties preference:
+  // the DdJ shouldn't initiate convocations (they're a tournament-day role).
+  // Admins prepare convocations from tournois-list.html before the DdJ
+  // workflow starts. If the DdJ opens an unprepared tournament, the
+  // pointage page now tells them to ask the admin.
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
   }
   const orgId = req.user.organizationId || null;
   const tournoiId = parseInt(req.params.tournoiId, 10);
