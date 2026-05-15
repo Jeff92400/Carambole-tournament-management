@@ -231,7 +231,7 @@
               </select>
             </div>
 
-            <div>
+            <div id="edit_categorie_wrapper">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Classement FFB</label>
               <select id="edit_categorie" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                 <option value="">-- Sélectionner --</option>
@@ -264,14 +264,43 @@
               </select>
             </div>
 
-            <div>
+            <div id="edit_taille_wrapper">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Taille</label>
               <input type="number" id="edit_taille" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
 
-            <div>
+            <div id="edit_taille_cadre_wrapper">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Taille cadre</label>
               <input type="text" id="edit_taille_cadre" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+
+            <!-- V 2.0.786 — Quilles-specific fields in edit modal (Sprint 2 B.2) -->
+            <div id="edit_quilles_section" style="display: none; grid-column: 1 / -1; padding: 14px 16px; background: #fff8e1; border-left: 4px solid #c8102e; border-radius: 6px;">
+              <div style="font-weight: 700; color: #8b0000; font-size: 13px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Paramètres Quilles
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div id="edit_fixed_distance_wrapper" style="display: none;">
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Distance fixe (9Q) *</label>
+                  <input type="number" id="edit_fixed_distance" min="50" max="1000" step="50" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div id="edit_matrix_wrapper" style="display: none;">
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Matrice de distance 5Q *</label>
+                  <select id="edit_distance_matrix_id" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">-- Aucune --</option>
+                  </select>
+                </div>
+                <div id="edit_nb_tables_wrapper" style="display: none;">
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Nombre de tables disponibles</label>
+                  <input type="number" id="edit_nb_tables" min="1" max="20" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div>
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Type de tournoi</label>
+                  <select id="edit_tournament_type" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">-- Standard --</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div style="grid-column: 1 / -1; margin-top: 10px; padding-top: 15px; border-top: 1px solid #eee;">
@@ -1519,7 +1548,11 @@
     }
 
     // Open edit modal
-    function openEditModal(tournoi) {
+    async function openEditModal(tournoi) {
+      // V 2.0.786 — Load Quilles context first so dropdowns are populated
+      // before we try to set their values.
+      await _loadQuillesContext();
+
       document.getElementById('edit_tournoi_id').value = tournoi.tournoi_id;
       document.getElementById('edit_nom').value = tournoi.nom || '';
       // V 2.0.619 — mode dropdown options are UPPERCASE; the DB value
@@ -1538,13 +1571,39 @@
       // matcher so "cercle billard neuilly" → "Cercle Billard Neuilly".
       document.getElementById('edit_lieu').value = matchOptionValue('edit_lieu', tournoi.lieu || '');
       document.getElementById('edit_lieu_2').value = matchOptionValue('edit_lieu_2', tournoi.lieu_2 || '');
-      document.getElementById('edit_tournament_number').value = tournoi.tournament_number || '';
       document.getElementById('edit_taille').value = tournoi.taille || '';
       document.getElementById('edit_taille_cadre').value = tournoi.taille_cadre || '';
 
       // New fields for notification toggle and status
       document.getElementById('edit_notify_on_changes').checked = tournoi.notify_on_changes !== false;
       document.getElementById('edit_status').value = tournoi.status || 'active';
+
+      // V 2.0.786 — Trigger Quilles UI for the selected mode BEFORE setting
+      // tournament_number (so the options match the mode), then prefill
+      // Quilles-specific fields.
+      _refreshQuillesFields('edit_', 'edit_quilles_section');
+      document.getElementById('edit_tournament_number').value = tournoi.tournament_number || '';
+
+      const modeUpper = (tournoi.mode || '').toUpperCase();
+      const isQuilles = modeUpper === '5Q' || modeUpper === '5 QUILLES'
+                     || modeUpper === '9Q' || modeUpper === '9 QUILLES';
+      if (isQuilles) {
+        // Tournament type
+        const ttSel = document.getElementById('edit_tournament_type');
+        if (ttSel) ttSel.value = tournoi.tournament_type || '';
+        // 9Q: fixed distance
+        if (modeUpper === '9Q' || modeUpper === '9 QUILLES') {
+          const fd = document.getElementById('edit_fixed_distance');
+          if (fd) fd.value = tournoi.fixed_distance || _quilles9qDefaultDistance;
+        }
+        // 5Q: matrix + nb_tables
+        if (modeUpper === '5Q' || modeUpper === '5 QUILLES') {
+          const mx = document.getElementById('edit_distance_matrix_id');
+          if (mx) mx.value = tournoi.distance_matrix_id || '';
+          const nt = document.getElementById('edit_nb_tables');
+          if (nt) nt.value = tournoi.nb_tables || '';
+        }
+      }
 
       document.getElementById('editTournoiModal').style.display = 'flex';
     }
@@ -1601,19 +1660,47 @@
       submitBtn.textContent = 'Enregistrement...';
 
       try {
+        // V 2.0.786 — Detect Quilles mode for edit submission
+        const editModeUpper = (document.getElementById('edit_mode').value || '').toUpperCase();
+        const editIs5Q = editModeUpper === '5Q' || editModeUpper === '5 QUILLES';
+        const editIs9Q = editModeUpper === '9Q' || editModeUpper === '9 QUILLES';
+        const editIsQuilles = editIs5Q || editIs9Q;
+
+        const editTournamentNumber = parseInt(document.getElementById('edit_tournament_number').value) || null;
+        const editCategorieValue = editIsQuilles
+          ? 'OPEN'
+          : document.getElementById('edit_categorie').value;
+
+        // Front-end validation for Quilles requirements
+        if (editIs9Q && !document.getElementById('edit_fixed_distance').value) {
+          alert('La distance fixe est obligatoire pour un tournoi 9 Quilles.');
+          return;
+        }
+        if (editIs5Q && !document.getElementById('edit_distance_matrix_id').value) {
+          alert('Veuillez sélectionner une matrice de distance pour le tournoi 5 Quilles.');
+          return;
+        }
+
         const data = {
           tournoi_id: parseInt(document.getElementById('edit_tournoi_id').value),
           nom: document.getElementById('edit_nom').value,
           mode: document.getElementById('edit_mode').value,
-          categorie: document.getElementById('edit_categorie').value,
-          tournament_number: parseInt(document.getElementById('edit_tournament_number').value) || null,
+          categorie: editCategorieValue,
+          tournament_number: editTournamentNumber,
           debut: document.getElementById('edit_debut').value || null,
           lieu: document.getElementById('edit_lieu').value || null,
           lieu_2: document.getElementById('edit_lieu_2').value || null,
-          taille: parseInt(document.getElementById('edit_taille').value) || null,
-          taille_cadre: document.getElementById('edit_taille_cadre').value || null,
+          taille: editIsQuilles ? null : (parseInt(document.getElementById('edit_taille').value) || null),
+          taille_cadre: editIsQuilles ? null : (document.getElementById('edit_taille_cadre').value || null),
           notify_on_changes: document.getElementById('edit_notify_on_changes').checked,
-          status: newStatus
+          status: newStatus,
+          // V 2.0.786 — Quilles fields (backend uses COALESCE, so null keeps existing)
+          tournament_format: editIsQuilles ? 'single_day_bracket' : null,
+          tournament_type: editIsQuilles ? (document.getElementById('edit_tournament_type').value || null) : null,
+          distance_matrix_id: editIs5Q ? (parseInt(document.getElementById('edit_distance_matrix_id').value) || null) : null,
+          fixed_distance: editIs9Q ? (parseInt(document.getElementById('edit_fixed_distance').value) || null) : null,
+          nb_tables: editIs5Q ? (parseInt(document.getElementById('edit_nb_tables').value) || null) : null,
+          tour_number: editIsQuilles ? editTournamentNumber : null
         };
 
         const success = await updateTournoi(data);
@@ -1675,7 +1762,7 @@
           });
           if (r.ok) {
             const types = await r.json();
-            ['create_tournament_type'].forEach(selId => {
+            ['create_tournament_type', 'edit_tournament_type'].forEach(selId => {
               const sel = document.getElementById(selId);
               if (sel) {
                 sel.innerHTML = '<option value="">-- Standard --</option>' +
@@ -1706,10 +1793,14 @@
 
     // V 2.0.785 — Cache the original "Numéro du tournoi" options (carambole)
     // so we can restore them when switching back from a Quilles mode.
+    // V 2.0.786 — Now keyed by prefix ('create_' / 'edit_') so each modal
+    // caches its own carambole options.
     let _caramboleTournamentNumberOptions = null;
 
-    // Toggle Quilles-specific fields based on selected mode
-    function _refreshQuillesFields(modeSelectId, sectionId) {
+    // V 2.0.786 — Toggle Quilles-specific fields. `prefix` is 'create_' or
+    // 'edit_' so the same logic drives both create and edit modals.
+    function _refreshQuillesFields(prefix, sectionId) {
+      const modeSelectId = prefix + 'mode';
       const sel = document.getElementById(modeSelectId);
       const section = document.getElementById(sectionId);
       if (!sel || !section) return;
@@ -1720,13 +1811,13 @@
       const isQuilles = is5Q || is9Q;
 
       // Swap "Numéro du tournoi" options: TR1-TR4 for Quilles, T1-T3+Finale
-      // for carambole. The value remains the integer tour number (1, 2, 3, 4)
-      // so tournoi_ext.tournament_number is consistent across modes.
-      const tnSel = document.getElementById('create_tournament_number');
+      // for carambole. Cached per-prefix because the carambole options
+      // come from loadTournamentRounds() which runs once at page load.
+      _caramboleTournamentNumberOptions = _caramboleTournamentNumberOptions || {};
+      const tnSel = document.getElementById(prefix + 'tournament_number');
       if (tnSel) {
-        // Cache carambole options on first call (after loadTournamentRounds ran)
-        if (_caramboleTournamentNumberOptions === null) {
-          _caramboleTournamentNumberOptions = tnSel.innerHTML;
+        if (!_caramboleTournamentNumberOptions[prefix]) {
+          _caramboleTournamentNumberOptions[prefix] = tnSel.innerHTML;
         }
         if (isQuilles) {
           tnSel.innerHTML = '<option value="">-- Sélectionner --</option>' +
@@ -1735,44 +1826,37 @@
             '<option value="3">TR3</option>' +
             '<option value="4">TR4</option>';
         } else {
-          tnSel.innerHTML = _caramboleTournamentNumberOptions;
+          tnSel.innerHTML = _caramboleTournamentNumberOptions[prefix];
         }
       }
 
       section.style.display = isQuilles ? '' : 'none';
 
-      // Toggle 9Q vs 5Q sub-blocks (create form)
-      const fdWrapper = document.getElementById('create_fixed_distance_wrapper');
-      const mxWrapper = document.getElementById('create_matrix_wrapper');
-      const ntWrapper = document.getElementById('create_nb_tables_wrapper');
-      const tailleWrapper = document.getElementById('create_taille_wrapper');
-      const tailleCadreWrapper = document.getElementById('create_taille_cadre_wrapper');
-      const categorieWrapper = document.getElementById('create_categorie_wrapper');
-      const categorieSelect = document.getElementById('create_categorie');
+      const fdWrapper = document.getElementById(prefix + 'fixed_distance_wrapper');
+      const mxWrapper = document.getElementById(prefix + 'matrix_wrapper');
+      const ntWrapper = document.getElementById(prefix + 'nb_tables_wrapper');
+      const tailleWrapper = document.getElementById(prefix + 'taille_wrapper');
+      const tailleCadreWrapper = document.getElementById(prefix + 'taille_cadre_wrapper');
+      const categorieWrapper = document.getElementById(prefix + 'categorie_wrapper');
+      const categorieSelect = document.getElementById(prefix + 'categorie');
 
       if (fdWrapper) fdWrapper.style.display = is9Q ? '' : 'none';
       if (mxWrapper) mxWrapper.style.display = is5Q ? '' : 'none';
       if (ntWrapper) ntWrapper.style.display = is5Q ? '' : 'none';
-      // Hide carambole-specific fields for Quilles
       if (tailleWrapper) tailleWrapper.style.display = isQuilles ? 'none' : '';
       if (tailleCadreWrapper) tailleCadreWrapper.style.display = isQuilles ? 'none' : '';
-      // V 2.0.781 — Quilles LBIF tournaments have no FFB category (open to all
-      // ranks). Hide the field and toggle `required` so the form can submit.
-      // The "Type de tournoi" field (régional / qualif_n1 / finale_ligue) plays
-      // the role of categorisation for Quilles.
       if (categorieWrapper) categorieWrapper.style.display = isQuilles ? 'none' : '';
       if (categorieSelect) categorieSelect.required = !isQuilles;
 
-      // Pre-fill 9Q default distance
       if (is9Q) {
-        const fdInput = document.getElementById('create_fixed_distance');
+        const fdInput = document.getElementById(prefix + 'fixed_distance');
         if (fdInput && !fdInput.value) fdInput.value = _quilles9qDefaultDistance;
       }
 
-      // Populate matrix selector for 5Q (active matrices on tournament date)
       if (is5Q) {
-        const matrixSel = document.getElementById('create_distance_matrix_id');
-        const debutVal = document.getElementById('create_debut').value;
+        const matrixSel = document.getElementById(prefix + 'distance_matrix_id');
+        const debutEl = document.getElementById(prefix + 'debut');
+        const debutVal = debutEl ? debutEl.value : '';
         const today = debutVal || new Date().toISOString().slice(0, 10);
         const active = _quillesMatrices.filter(m => {
           if (m.active_from && m.active_from.slice(0,10) > today) return false;
@@ -1797,7 +1881,7 @@
       // Reset form
       document.getElementById('createTournoiForm').reset();
       // Make sure Quilles section starts hidden until a Quilles mode is selected
-      _refreshQuillesFields('create_mode', 'create_quilles_section');
+      _refreshQuillesFields('create_', 'create_quilles_section');
       document.getElementById('createTournoiModal').style.display = 'flex';
     }
 
@@ -1901,17 +1985,25 @@
     // Modal mode change listeners - update category dropdown
     document.getElementById('edit_mode').addEventListener('change', () => {
       updateCategorieDropdown('edit_mode', 'edit_categorie');
+      // V 2.0.786 — Toggle Quilles fields when mode changes in edit modal
+      _refreshQuillesFields('edit_', 'edit_quilles_section');
+    });
+    document.getElementById('edit_debut').addEventListener('change', () => {
+      const modeVal = (document.getElementById('edit_mode').value || '').toUpperCase();
+      if (modeVal === '5Q' || modeVal === '5 QUILLES') {
+        _refreshQuillesFields('edit_', 'edit_quilles_section');
+      }
     });
     document.getElementById('create_mode').addEventListener('change', () => {
       updateCategorieDropdown('create_mode', 'create_categorie');
       // V 2.0.779 — Toggle Quilles fields when mode changes
-      _refreshQuillesFields('create_mode', 'create_quilles_section');
+      _refreshQuillesFields('create_', 'create_quilles_section');
     });
     // Re-evaluate matrix filtering when tournament date changes (5Q only)
     document.getElementById('create_debut').addEventListener('change', () => {
       const modeVal = (document.getElementById('create_mode').value || '').toUpperCase();
       if (modeVal === '5Q' || modeVal === '5 QUILLES') {
-        _refreshQuillesFields('create_mode', 'create_quilles_section');
+        _refreshQuillesFields('create_', 'create_quilles_section');
       }
     });
 
