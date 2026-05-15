@@ -397,17 +397,10 @@
                   </select>
                 </div>
 
-                <!-- Tour number (Quilles use TR1/TR2/TR3 instead of T1/T2/T3) -->
-                <div>
-                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Numéro de tour (TR)</label>
-                  <select id="create_tour_number" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
-                    <option value="">-- Sélectionner --</option>
-                    <option value="1">TR1</option>
-                    <option value="2">TR2</option>
-                    <option value="3">TR3</option>
-                    <option value="4">TR4</option>
-                  </select>
-                </div>
+                <!-- V 2.0.785 — "Numéro de tour" merged into the top-level
+                     "Numéro du tournoi" dropdown which now switches labels
+                     dynamically (T1/T2/T3/Finale ↔ TR1/TR2/TR3/TR4) based
+                     on selected mode. Tour value stored in tournament_number. -->
               </div>
             </div>
           </div>
@@ -1711,6 +1704,10 @@
       }
     }
 
+    // V 2.0.785 — Cache the original "Numéro du tournoi" options (carambole)
+    // so we can restore them when switching back from a Quilles mode.
+    let _caramboleTournamentNumberOptions = null;
+
     // Toggle Quilles-specific fields based on selected mode
     function _refreshQuillesFields(modeSelectId, sectionId) {
       const sel = document.getElementById(modeSelectId);
@@ -1721,6 +1718,26 @@
       const is5Q = val === '5Q' || val === '5 QUILLES';
       const is9Q = val === '9Q' || val === '9 QUILLES';
       const isQuilles = is5Q || is9Q;
+
+      // Swap "Numéro du tournoi" options: TR1-TR4 for Quilles, T1-T3+Finale
+      // for carambole. The value remains the integer tour number (1, 2, 3, 4)
+      // so tournoi_ext.tournament_number is consistent across modes.
+      const tnSel = document.getElementById('create_tournament_number');
+      if (tnSel) {
+        // Cache carambole options on first call (after loadTournamentRounds ran)
+        if (_caramboleTournamentNumberOptions === null) {
+          _caramboleTournamentNumberOptions = tnSel.innerHTML;
+        }
+        if (isQuilles) {
+          tnSel.innerHTML = '<option value="">-- Sélectionner --</option>' +
+            '<option value="1">TR1</option>' +
+            '<option value="2">TR2</option>' +
+            '<option value="3">TR3</option>' +
+            '<option value="4">TR4</option>';
+        } else {
+          tnSel.innerHTML = _caramboleTournamentNumberOptions;
+        }
+      }
 
       section.style.display = isQuilles ? '' : 'none';
 
@@ -1847,7 +1864,9 @@
         distance_matrix_id: is5Q ? (parseInt(document.getElementById('create_distance_matrix_id').value) || null) : null,
         fixed_distance: is9Q ? (parseInt(document.getElementById('create_fixed_distance').value) || null) : null,
         nb_tables: is5Q ? (parseInt(document.getElementById('create_nb_tables').value) || null) : null,
-        tour_number: isQuilles ? (parseInt(document.getElementById('create_tour_number').value) || null) : null
+        // V 2.0.785 — Tour number = tournament_number for Quilles (same field,
+        // different label TR1-TR4 vs T1-T3+Finale).
+        tour_number: isQuilles ? (parseInt(document.getElementById('create_tournament_number').value) || null) : null
       };
 
       // Front-end validation for Quilles requirements
