@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Plan — Typologie des tournois par mode de jeu (V3.0)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 980px; margin: 2em auto; padding: 0 1.5em; color: #1a1a1a; line-height: 1.55; }
+  h1 { color: #1F4788; border-bottom: 3px solid #1F4788; padding-bottom: 0.3em; }
+  h2 { color: #1F4788; margin-top: 2em; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2em; }
+  h3 { color: #333; margin-top: 1.5em; }
+  .meta { background: #f5f7fa; border-left: 4px solid #1F4788; padding: 0.8em 1.2em; margin: 1em 0 2em; font-size: 0.95em; }
+  .meta strong { display: inline-block; min-width: 130px; }
+  .status { display: inline-block; padding: 0.15em 0.6em; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
+  .status-todo { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.94em; }
+  th, td { border: 1px solid #ddd; padding: 0.5em 0.75em; text-align: left; vertical-align: top; }
+  th { background: #1F4788; color: white; }
+  tr:nth-child(even) td { background: #f8f9fa; }
+  code { background: #f3f3f3; padding: 0.1em 0.4em; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #2d2d2d; color: #f8f8f2; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+  .callout { background: #e7f3ff; border-left: 4px solid #1F4788; padding: 0.8em 1.2em; margin: 1em 0; }
+  .warn { background: #fff5e6; border-left: 4px solid #ffc107; padding: 0.8em 1.2em; margin: 1em 0; }
+  .ok { background: #e9f7ef; border-left: 4px solid #28a745; padding: 0.8em 1.2em; margin: 1em 0; }
+  ul li { margin: 0.3em 0; }
+  .effort-total { background: #1F4788; color: white; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Typologie des tournois par mode de jeu</h1>
+<p style="font-size: 1.1em; color: #555;">Permettre à chaque CDB de définir une typologie de tournois (T1/T2/T3/FINALE…) <strong>différente selon le mode de jeu</strong>, avec un mécanisme d'héritage pour préserver la simplicité du cas standard.</p>
+
+<div class="meta">
+  <p><strong>Statut :</strong> <span class="status status-todo">à démarrer</span></p>
+  <p><strong>Cible :</strong> V3.0 — release inter-saison 2026 (juin-août 2026)</p>
+  <p><strong>Date de rédaction :</strong> 15 mai 2026</p>
+  <p><strong>Initiative parent :</strong> Quilles (Initiatives/Quilles/) — déclencheur direct, mais bénéfice général</p>
+  <p><strong>Effort estimé :</strong> ~5 à 5,5 jours/personne</p>
+  <p><strong>Pré-requis :</strong> aucun (peut être livré indépendamment du bootstrap Quilles)</p>
+</div>
+
+<h2>1. Contexte &amp; motivation</h2>
+
+<p>Aujourd'hui, la table <code>tournament_types</code> stocke la typologie des tournois (T1, T2, T3, FINALE…) avec une clé unique <code>(tournament_number, organization_id)</code>. Cela signifie qu'<strong>un CDB ne peut avoir qu'une seule typologie, appliquée uniformément à tous ses modes de jeu</strong> (Libre, Cadre, Bande, 3 Bandes — et bientôt 5Q, 9Q).</p>
+
+<p>Cette uniformité ne tient plus dès que :</p>
+<ul>
+  <li>Un CDB ajoute la discipline <strong>Quilles</strong> (modes 5Q / 9Q), qui pourrait fonctionner avec un nombre de phases différent du carambole.</li>
+  <li>Un CDB veut organiser <strong>4 tournois + 1 finale pour Cadre</strong> mais conserver <strong>3 tournois + 1 finale</strong> pour Libre, Bande et 3 Bandes.</li>
+  <li>Plus généralement, n'importe quelle évolution de format propre à un mode (ex. nombre de qualificatifs, plusieurs finales).</li>
+</ul>
+
+<div class="callout">
+  <strong>Décision de scope (validée en discussion) :</strong> la granularité retenue est le <strong>mode de jeu</strong>, pas la sous-catégorie (ex. Cadre 47/2 R3 vs Cadre 47/2 R4). Au sein d'un mode, toutes les catégories partagent la typologie. Le schéma intègre néanmoins un crochet <code>category_id NULL</code> pour permettre une descente future au niveau catégorie sans rupture.
+</div>
+
+<h2>2. Objectif</h2>
+
+<ul>
+  <li><strong>Flexibilité maximale</strong> : chaque mode peut avoir sa typologie propre.</li>
+  <li><strong>Zéro friction pour les CDBs actuels</strong> : la typologie globale existante continue de s'appliquer par défaut à tous les modes. Aucune action requise pour les comités qui n'ont pas besoin de différencier.</li>
+  <li><strong>Découvrabilité</strong> : l'admin doit pouvoir voir d'un coup d'œil quels modes ont des surcharges, sans devoir naviguer mode par mode.</li>
+  <li><strong>Réversibilité</strong> : une surcharge peut être supprimée pour revenir à l'héritage global, à tout moment.</li>
+</ul>
+
+<h2>3. Modèle conceptuel : héritage à deux niveaux</h2>
+
+<p>Chaque ligne de typologie est rattachée à un mode de jeu, ou à <strong>aucun</strong> (auquel cas elle s'applique à tous les modes par défaut).</p>
+
+<pre>Lookup pour "type de tournoi numéro N, mode M, organisation O" :
+
+  1. Chercher une ligne (N, M, O)        ← surcharge spécifique au mode
+  2. Sinon, chercher (N, NULL, O)        ← typologie globale de l'organisation
+  3. Sinon, valeur par défaut platform   ← cas extrême, ne devrait pas arriver
+</pre>
+
+<p>Un cas particulier : la <strong>suppression d'un type pour un mode donné</strong> (ex. 5Q n'a pas de T3 alors que la typologie globale en a un). On ne peut pas simplement "ne pas avoir de ligne", car la fallback ramènerait la ligne globale. Solution : une ligne <em>tombstone</em> avec <code>is_deleted = TRUE</code> qui indique "ce numéro n'existe pas pour ce mode".</p>
+
+<h2>4. Modèle de données</h2>
+
+<h3>Schéma modifié</h3>
+
+<pre>ALTER TABLE tournament_types
+  ADD COLUMN game_mode_id INTEGER NULL REFERENCES game_modes(id) ON DELETE CASCADE,
+  ADD COLUMN category_id  INTEGER NULL REFERENCES categories(id) ON DELETE CASCADE,
+  ADD COLUMN is_deleted   BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Ancienne contrainte UNIQUE à supprimer :
+ALTER TABLE tournament_types DROP CONSTRAINT IF EXISTS tournament_types_unique;
+
+-- Nouvelle contrainte UNIQUE (NULLS NOT DISTINCT pour traiter NULL comme une valeur) :
+ALTER TABLE tournament_types
+  ADD CONSTRAINT tournament_types_unique
+  UNIQUE NULLS NOT DISTINCT (tournament_number, game_mode_id, category_id, organization_id);
+
+CREATE INDEX idx_tournament_types_lookup
+  ON tournament_types (organization_id, game_mode_id, tournament_number);</pre>
+
+<div class="ok">
+  <strong>Compatibilité ascendante :</strong> toutes les lignes existantes sont migrées avec <code>game_mode_id = NULL</code> et <code>category_id = NULL</code> → comportement identique à aujourd'hui, zéro impact sur les CDBs en production.
+</div>
+
+<h3>Note sur <code>category_id</code></h3>
+
+<p>La colonne est créée mais <strong>non exposée dans l'UI en V3.0</strong>. La logique de lookup ignore <code>category_id</code> tant qu'il vaut NULL. C'est une garantie de forward-compatibility : si un jour un CDB demande de différencier au niveau sous-catégorie, on étend la fallback chain sans migration de schéma.</p>
+
+<h2>5. Interface utilisateur</h2>
+
+<h3>Principe : "Tous les modes" par défaut, surcharge à la demande</h3>
+
+<p>L'accordéon "Typologie des tournois" (Settings → Compétitions, <code>frontend/settings-admin.html</code> lignes 1913-1967 actuelles) gagne un sélecteur en haut :</p>
+
+<pre>Appliqué à : [ Tous les modes ▾ ]
+              ───────────────────
+              ▸ Tous les modes  ← défaut
+              ▸ Carambole
+                  Libre
+                  Cadre
+                  Bande
+                  3 Bandes
+              ▸ Quilles            ← visible uniquement si modes Quilles activés
+                  5Q
+                  9Q</pre>
+
+<h3>Cas 1 — "Tous les modes" sélectionné (état par défaut, 99% des CDBs)</h3>
+<p>L'interface est <strong>strictement identique à aujourd'hui</strong>. Le tableau liste les types globaux. Toute édition modifie la typologie partagée.</p>
+
+<p>Un indicateur discret apparaît sur les lignes qui ont des surcharges ailleurs :</p>
+
+<pre>N°  Code     Nom                       Classement  Finale
+1   T1       Tournoi Qualificatif 1    ✓                      ⚠ surchargé pour : 5Q, 9Q
+2   T2       Tournoi Qualificatif 2    ✓
+3   T3       Tournoi Qualificatif 3    ✓                      ⚠ surchargé pour : 5Q (supprimé)
+4   FINALE   Finale Départementale                 ✓          </pre>
+
+<p>Cliquer sur l'avertissement navigue vers la vue du mode concerné.</p>
+
+<h3>Cas 2 — un mode spécifique sélectionné (ex. "5Q")</h3>
+<p>Les lignes héritées de "Tous les modes" sont affichées en grisé, avec un bouton <em>Personnaliser</em> par ligne :</p>
+
+<pre>Typologie pour 5Q   (héritée de "Tous les modes" sauf indication contraire)
+
+N°  Code     Nom                       Classement  Finale
+1   T1       Tournoi Qualificatif 1    ✓                      [Personnaliser]
+2   T2       Tournoi Qualificatif 2    ✓                      [Personnaliser]
+3   T3       Tournoi Qualificatif 3    ✓                      [Personnaliser]
+4   FINALE   Finale Départementale                 ✓          [Personnaliser]
+
+[+ Ajouter un type spécifique à 5Q]</pre>
+
+<p>Cliquer <em>Personnaliser</em> sur une ligne héritée crée une surcharge pour ce mode. La ligne devient pleinement éditable, visuellement distincte (bordure colorée à gauche), et un bouton <em>Revenir au défaut</em> apparaît.</p>
+
+<h3>Cas 3 — surcharges et types propres au mode</h3>
+
+<pre>Typologie pour 5Q
+
+N°  Code     Nom                       Classement  Finale
+1   T1       Tournoi 5Q n°1            ✓                      [⚙ surchargé]    [Revenir au défaut]
+2   T2       Tournoi 5Q n°2            ✓                      [⚙ surchargé]    [Revenir au défaut]
+3   T3       —                                                [✕ supprimé]     [Revenir au défaut]
+4   FINALE   Finale 5Q                             ✓          [⚙ surchargé]    [Revenir au défaut]
+5   MIC      Match Inter-Clubs                                [⚙ propre à 5Q]</pre>
+
+<h3>Visibilité conditionnelle du sélecteur</h3>
+<p>Le sélecteur "Appliqué à" n'apparaît que si le CDB a <strong>au moins un mode actif</strong> au-delà du jeu de base. Pour un CDB ne pratiquant que le carambole standard, l'UI reste identique à aujourd'hui — le sélecteur est masqué.</p>
+
+<h2>6. Logique backend (helpers à refactorer)</h2>
+
+<table>
+  <tr><th>Helper actuel</th><th>Nouvelle signature</th><th>Fichier</th></tr>
+  <tr><td><code>getRankingTournamentNumbers(orgId)</code></td><td><code>getRankingTournamentNumbers(orgId, mode)</code></td><td>settings.js:733</td></tr>
+  <tr><td><code>getFinaleTournamentNumber(orgId)</code></td><td><code>getFinaleTournamentNumber(orgId, mode)</code></td><td>settings.js:755</td></tr>
+  <tr><td><code>getTournamentLabel(orgId, num)</code></td><td><code>getTournamentLabel(orgId, mode, num)</code></td><td>settings.js:772</td></tr>
+</table>
+
+<p>Chaque helper applique la fallback chain (lookup mode → lookup global → défaut). Le mode est toujours connu du contexte appelant (présent sur la ligne <code>tournoi_ext</code> ou sur la requête).</p>
+
+<h3>Sites d'appel à mettre à jour (~8)</h3>
+<ul>
+  <li><code>backend/routes/rankings.js:25</code></li>
+  <li><code>backend/routes/inscriptions.js:2091</code></li>
+  <li><code>backend/routes/emailing.js:1730, 2742, 3010</code></li>
+  <li><code>backend/routes/tournaments.js:2365-2381</code> (JOIN <code>tournament_types</code>)</li>
+  <li><code>backend/routes/reference-data.js:633</code> (endpoint public, ajouter filtre <code>?mode=</code>)</li>
+</ul>
+
+<div class="warn">
+  <strong>Dette technique à surveiller (hors scope direct mais à noter) :</strong> plusieurs endroits détectent encore les finales via <code>LOWER(nom) LIKE '%finale%'</code> (<code>server.js:1110, 1531, 1739</code>, <code>enrollment-requests.js:454, 799</code>, <code>db-postgres.js:541</code>). Cette détection par nom devient plus fragile quand la typologie diffère par mode. À nettoyer en V3.0 ou V3.1 (passer à <code>is_finale</code> partout).
+</div>
+
+<h2>7. API : endpoints à étendre</h2>
+
+<table>
+  <tr><th>Endpoint</th><th>Changement</th></tr>
+  <tr><td><code>GET /api/settings/tournament-types</code></td><td>Accepte un paramètre <code>?mode=</code>. Sans paramètre : retourne les lignes globales. Avec : retourne lignes globales + surcharges du mode + tombstones.</td></tr>
+  <tr><td><code>POST /api/settings/tournament-types</code></td><td>Accepte <code>game_mode_id</code> (nullable). Si fourni : crée une surcharge. Sinon : crée une ligne globale.</td></tr>
+  <tr><td><code>PUT /api/settings/tournament-types/:id</code></td><td>Idem POST.</td></tr>
+  <tr><td><code>DELETE /api/settings/tournament-types/:id</code></td><td>Si ligne globale : supprime. Si surcharge : supprime (revient au défaut).</td></tr>
+  <tr><td><code>POST /api/settings/tournament-types/:id/promote-to-global</code></td><td><em>(optionnel)</em> Action "Promouvoir vers Tous les modes" si les surcharges convergent.</td></tr>
+</table>
+
+<h2>8. Migration &amp; compatibilité</h2>
+
+<ol>
+  <li><strong>Migration SQL</strong> : ajout des colonnes, NULL par défaut sur les lignes existantes.</li>
+  <li><strong>Lecture</strong> : la fallback chain garantit que les CDBs actuels (sans surcharges) ont un comportement strictement identique.</li>
+  <li><strong>Écriture</strong> : l'UI n'expose le sélecteur que si plusieurs modes sont activés — pour un CDB carambole standard, rien ne change visuellement.</li>
+  <li><strong>Rollback</strong> : les colonnes ajoutées sont nullable, supprimer la feature consiste à ignorer les lignes non-NULL côté lookup. Aucune perte de donnée.</li>
+</ol>
+
+<h2>9. Effort &amp; phasage</h2>
+
+<table>
+  <tr><th>Phase</th><th>Travail</th><th>Effort</th></tr>
+  <tr><td>1. Schéma</td><td>Migration <code>game_mode_id</code>, <code>category_id</code>, <code>is_deleted</code>, contrainte UNIQUE, index</td><td>0,5 j</td></tr>
+  <tr><td>2. Helpers backend</td><td>3 helpers + fallback chain + gestion tombstones</td><td>1,5 j</td></tr>
+  <tr><td>3. Sites d'appel</td><td>Passer <code>mode</code> aux ~8 sites (rankings, inscriptions, emailing, tournaments)</td><td>0,5 j</td></tr>
+  <tr><td>4. API</td><td>Endpoints CRUD + filtre <code>?mode=</code></td><td>0,5 j</td></tr>
+  <tr><td>5. UI Settings</td><td>Sélecteur mode, états surcharge/héritage, indicateurs sur vue globale</td><td>1,5 j</td></tr>
+  <tr><td>6. Tests</td><td>Régression CDBs existants + cas surcharge + cas tombstone</td><td>1 j</td></tr>
+  <tr class="effort-total"><td colspan="2">Total</td><td>~5,5 j</td></tr>
+</table>
+
+<h3>Découpage possible (livrer en deux temps)</h3>
+<ul>
+  <li><strong>Lot 1 (V3.0)</strong> — Schéma + helpers + API. UI <em>non livrée</em>. Les CDBs existants tournent inchangés. Préparation pour Quilles.</li>
+  <li><strong>Lot 2 (V3.0 ou V3.1)</strong> — UI complète. À livrer en même temps que l'activation des modes Quilles côté Super Admin.</li>
+</ul>
+
+<h2>10. Questions ouvertes</h2>
+
+<ul>
+  <li><strong>Action "Revenir au défaut" sur une ligne tombstone</strong> : suppression simple, mais que faire si le mode n'a aucune surcharge restante ? Doit-on supprimer automatiquement les autres lignes orphelines du mode ? <em>(Probablement non — laisser explicite.)</em></li>
+  <li><strong>Action "Promouvoir vers Tous les modes"</strong> : utile si toutes les surcharges d'une ligne convergent vers la même valeur. Optionnelle pour V3.0 ?</li>
+  <li><strong>Affichage du sélecteur</strong> : seuil exact de visibilité — 1 mode au-delà du carambole ? Configurable ? <em>(Recommandation : afficher dès qu'au moins un mode Quilles est activé, sinon masquer.)</em></li>
+  <li><strong>Granularité catégorie</strong> : confirmer définitivement qu'on ne livre pas l'UI catégorie en V3.0. Le crochet schéma reste, l'UI attend une demande terrain.</li>
+</ul>
+
+<h2>11. Références fichiers</h2>
+
+<table>
+  <tr><th>Fichier</th><th>Rôle</th></tr>
+  <tr><td><code>backend/db-postgres.js</code></td><td>Migration de schéma (lignes 1935-1950 pour le seeding actuel à adapter)</td></tr>
+  <tr><td><code>backend/routes/settings.js:664-713, 733, 755, 772, 968-1067</code></td><td>Helpers, seeding, endpoints CRUD</td></tr>
+  <tr><td><code>backend/routes/rankings.js:25</code></td><td>Filtrage tournois de classement</td></tr>
+  <tr><td><code>backend/routes/inscriptions.js:2091</code></td><td>Idem</td></tr>
+  <tr><td><code>backend/routes/emailing.js:1730, 2742, 3010</code></td><td>Détection finale dans les emails</td></tr>
+  <tr><td><code>backend/routes/tournaments.js:2365-2381</code></td><td>JOIN <code>tournament_types</code> dans le listing</td></tr>
+  <tr><td><code>backend/routes/reference-data.js:633</code></td><td>Endpoint public typologie</td></tr>
+  <tr><td><code>frontend/settings-admin.html:1913-1967</code></td><td>Accordéon "Typologie des tournois"</td></tr>
+  <tr><td><code>frontend/generate-poules.html</code>, <code>frontend/rankings.html</code>, <code>frontend/emailing.html</code></td><td>Consommateurs (passer <code>mode</code> à l'endpoint de référence)</td></tr>
+</table>
+
+<hr>
+<p style="color: #888; font-size: 0.9em; text-align: center; margin-top: 3em;">
+Plan rédigé le 15 mai 2026 — à déplacer vers <code>OneDrive/.../Projet Tournois management FFB/Initiatives/Quilles/</code>
+</p>
+
+</body>
+</html>
