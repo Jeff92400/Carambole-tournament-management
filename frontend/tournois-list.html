@@ -942,8 +942,16 @@
 
     function formatCategorieLabel(tournoi) {
       if (_isQuillesModeStr(tournoi.mode)) {
-        // Show the LBIF tournament_type instead of the meaningless 'OPEN'
-        return QUILLES_TYPE_LABELS[tournoi.tournament_type] || tournoi.tournament_type || '—';
+        // V 2.0.796 — Show the LBIF tournament_type instead of the meaningless
+        // 'OPEN'. Fallback ladder:
+        //   1. mapped display name (Régional / Qualif N1 / Finale de Ligue)
+        //   2. raw code (when admin added a custom type)
+        //   3. 'Standard' (when no type set — Quilles tournament created
+        //      before V 2.0.779 introduced the type field, or admin left
+        //      the dropdown on the default option)
+        return QUILLES_TYPE_LABELS[tournoi.tournament_type]
+            || tournoi.tournament_type
+            || 'Standard';
       }
       return tournoi.categorie || '-';
     }
