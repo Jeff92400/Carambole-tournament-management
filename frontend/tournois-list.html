@@ -915,6 +915,39 @@
       return '';
     }
 
+    // V 2.0.795 — Display helpers tolerant of Quilles tournaments.
+    // Quilles use TR1-TR4 / FL labels instead of T1-T3 / Finale, and their
+    // categorie is the sentinel 'OPEN' (no FFB category). Replaces both in
+    // the table view so admins see meaningful labels.
+    const QUILLES_TYPE_LABELS = {
+      regional: 'Régional',
+      qualif_n1: 'Qualif N1',
+      finale_ligue: 'Finale de Ligue'
+    };
+
+    function _isQuillesModeStr(mode) {
+      const m = String(mode || '').toUpperCase().trim();
+      return m === '5Q' || m === '9Q' || m === '5 QUILLES' || m === '9 QUILLES';
+    }
+
+    function formatTournamentRoundLabel(tournoi) {
+      if (!tournoi.tournament_number) return '-';
+      if (_isQuillesModeStr(tournoi.mode)) {
+        // tournament_type='finale_ligue' → "Finale de Ligue", otherwise "TRn"
+        if (tournoi.tournament_type === 'finale_ligue') return 'Finale de Ligue';
+        return 'TR' + tournoi.tournament_number;
+      }
+      return tournamentRoundsMap[tournoi.tournament_number] || ('T' + tournoi.tournament_number);
+    }
+
+    function formatCategorieLabel(tournoi) {
+      if (_isQuillesModeStr(tournoi.mode)) {
+        // Show the LBIF tournament_type instead of the meaningless 'OPEN'
+        return QUILLES_TYPE_LABELS[tournoi.tournament_type] || tournoi.tournament_type || '—';
+      }
+      return tournoi.categorie || '-';
+    }
+
     // Format date
     function formatDate(dateStr) {
       if (!dateStr) return '-';
@@ -1009,9 +1042,9 @@
         row.innerHTML = `
           <td>${tournoi.tournoi_id}</td>
           <td><strong>${isCancelled ? '<s>' : ''}${tournoi.nom || '-'}${isCancelled ? '</s>' : ''}</strong>${cancelledBadge}${splitBadge}</td>
-          <td>${tournoi.tournament_number ? (tournamentRoundsMap[tournoi.tournament_number] || 'T' + tournoi.tournament_number) : '-'}</td>
+          <td>${formatTournamentRoundLabel(tournoi)}</td>
           <td><span class="badge ${getModeBadgeClass(tournoi.mode)}">${tournoi.mode || '-'}</span></td>
-          <td>${tournoi.categorie || '-'}</td>
+          <td>${formatCategorieLabel(tournoi)}</td>
           <td class="${getDateClass(tournoi.debut)}">${formatDate(tournoi.debut)}</td>
           <td>${tournoi.lieu || '-'}${tournoi.lieu_2 ? ' + ' + tournoi.lieu_2 : ''}</td>
           <td style="text-align: center;">${tournoi.taille || '-'}</td>
