@@ -198,7 +198,7 @@ git push origin main
 
 ## Versioning
 
-**Current Version:** V 2.0.743 05/26 (synchronisée depuis `frontend/login.html` le 2026-05-10)
+**Current Version:** V 2.0.767 05/26 (synchronisée depuis `frontend/login.html` le 2026-05-15)
 
 Version is displayed at the bottom of the login screen (`frontend/login.html`).
 

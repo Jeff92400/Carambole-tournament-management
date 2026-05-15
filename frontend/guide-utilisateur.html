@@ -1690,15 +1690,23 @@
 
     <!-- =================== ETAPE 1 POINTAGE =================== -->
     <h3 id="ddj-etape-1">Étape 1 — Pointage</h3>
+    <p>Depuis la <strong>V 2.0.767</strong> (15 mai 2026), le pointage utilise une logique inversée : chaque joueur doit être <strong>explicitement coché</strong> par le DdJ pour confirmer sa présence. Cela évite tout oubli, surtout pour les tournois à grand effectif (20-30 joueurs appelés un par un).</p>
     <ol class="steps">
-      <li>La liste des joueurs convoqués s'affiche, triée par classement.</li>
-      <li>Cochez la case verte à droite pour chaque joueur présent.</li>
-      <li>Pour un forfait, basculez l'étiquette « Présent / Forfait ».</li>
-      <li>Le compteur en haut de l'écran indique « X présents · Y forfaits · Z joueurs en poule ».</li>
-      <li>Cliquez sur <strong>« Continuer »</strong> pour passer à l'étape suivante.</li>
+      <li>La liste des joueurs convoqués s'affiche, triée par classement. Au départ, <strong>tous les joueurs sont en état « À pointer »</strong> (bordure pointillée grise, case vide).</li>
+      <li>Pour confirmer la présence : <strong>cochez la case ☐ à gauche</strong> du nom du joueur → la ligne passe en vert avec le badge « Présent » (case ✓ verte).</li>
+      <li>Pour déclarer un forfait : <strong>cliquez sur le badge à droite</strong> (« À pointer » ou « Présent ») → la ligne passe en rouge avec le badge « Forfait » et le nom barré.</li>
+      <li>Pour revenir en arrière : cliquer à nouveau sur la case (annule la présence) ou sur le badge (annule le forfait).</li>
+      <li>Le résumé en bas de page indique en temps réel : <em>« ⚠ N à pointer · ✓ X présents · Y forfaits »</em>.</li>
+      <li>Cliquez sur <strong>« Générer les poules »</strong> pour passer à l'étape suivante.</li>
     </ol>
     <div class="info-card warning">
-      <strong>⚠️ Forfait rétroactif :</strong> si vous tentez de passer un joueur en forfait alors que des matchs ont déjà été saisis pour lui, une fenêtre de confirmation s'affiche avec le décompte des matchs impactés. Confirmez uniquement si vous comprenez les conséquences.
+      <strong>⚠️ Le bouton « Générer les poules » est bloqué tant qu'au moins un joueur reste en « À pointer »</strong>. Une alerte liste les joueurs concernés. Chaque joueur doit être <em>soit coché présent, soit déclaré forfait</em>, sans état intermédiaire.
+    </div>
+    <div class="info-card warning">
+      <strong>⚠️ Forfait rétroactif :</strong> si vous tentez de passer un joueur en forfait alors que des matchs ont déjà été saisis pour lui, une fenêtre de confirmation s'affiche avec le décompte des matchs impactés. Confirmez uniquement si vous comprenez les conséquences (les scores existants sont conservés).
+    </div>
+    <div class="info-card">
+      <strong>💡 Astuce :</strong> les états « Présent » et « Forfait » sont mutuellement exclusifs. Cocher la case d'un joueur en forfait le bascule directement en présent (et inversement, déclarer forfait un joueur présent retire la coche).
     </div>
 
     <!-- =================== ETAPE 2 POULES =================== -->
