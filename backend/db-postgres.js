@@ -2897,6 +2897,19 @@ async function initializeDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_consolante_matches_tournoi ON ddj_consolante_matches(tournoi_id)`);
 
+    // V 2.0.799 — Sprint 2 D.5 hotfix: ensure p1_points_subis / p2_points_subis
+    // columns exist on the 3 DdJ match tables. The earlier guarded migration
+    // at line ~2618 ran BEFORE the CREATE TABLE blocks below, so on a fresh
+    // install the columns were only added on the SECOND server startup.
+    // Running the migration here (after the CREATE TABLE statements) makes
+    // it work in a single startup. Idempotent via ADD COLUMN IF NOT EXISTS.
+    await client.query(`ALTER TABLE ddj_poule_matches ADD COLUMN IF NOT EXISTS p1_points_subis INTEGER`);
+    await client.query(`ALTER TABLE ddj_poule_matches ADD COLUMN IF NOT EXISTS p2_points_subis INTEGER`);
+    await client.query(`ALTER TABLE ddj_bracket_matches ADD COLUMN IF NOT EXISTS p1_points_subis INTEGER`);
+    await client.query(`ALTER TABLE ddj_bracket_matches ADD COLUMN IF NOT EXISTS p2_points_subis INTEGER`);
+    await client.query(`ALTER TABLE ddj_consolante_matches ADD COLUMN IF NOT EXISTS p1_points_subis INTEGER`);
+    await client.query(`ALTER TABLE ddj_consolante_matches ADD COLUMN IF NOT EXISTS p2_points_subis INTEGER`);
+
     // ------------------------------------------------------------------
     // V 2.0.595 — DdJ V3 evolution (May 2026)
     //
