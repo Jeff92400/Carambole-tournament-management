@@ -199,6 +199,36 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
       // Non-fatal — DdJ screen works without distance/reprises
     }
 
+    // V 2.0.791 — Sprint 2 D.2: for Quilles tournaments, override the
+    // carambole game_parameters lookup with resolveDistance(). 9Q uses
+    // fixed_distance directly; 5Q needs nb_poules → counted from the saved
+    // convocation_poules (poules already exist if we reached the pointage
+    // screen). Reprises is forced to null (Quilles matches have no reprises).
+    try {
+      const { isQuillesMode, resolveDistance } = require('../utils/quilles-helpers');
+      if (isQuillesMode(tournament.mode)) {
+        const nbPoulesRow = await new Promise((resolve) => {
+          db.get(
+            `SELECT COUNT(DISTINCT poule_number)::int AS n
+               FROM convocation_poules
+              WHERE tournoi_id = $1`,
+            [tournoiId],
+            (err, r) => resolve(err ? null : r)
+          );
+        });
+        const nbPoules = nbPoulesRow?.n || null;
+        const resolved = await resolveDistance(tournament, nbPoules, { db });
+        gameParams = {
+          distance: resolved.distance,
+          reprises: null,
+          _quilles_source: resolved.source,
+          _quilles_warning: resolved.warning || null
+        };
+      }
+    } catch (e) {
+      console.error('[DdJ pointage] Quilles resolveDistance error:', e.message);
+    }
+
     // Resolve season from tournament date. Uses the shared helper so it
     // respects per-org overrides (current_season_override and the
     // season_start_month setting — some CDBs use a non-September cutoff).
@@ -831,6 +861,26 @@ router.post('/competitions/:id/poules/generate', authenticateToken, requireDdJ, 
       });
     }
 
+    // V 2.0.791 — Sprint 2 D.2: for Quilles, validate the distance can be
+    // resolved BEFORE committing the poule generation. Catches missing
+    // matrix / nb_tables / fixed_distance early so the DdJ gets a clear
+    // error message instead of seeing the workflow proceed with an
+    // undefined distance.
+    try {
+      const { isQuillesMode, resolveDistance } = require('../utils/quilles-helpers');
+      if (isQuillesMode(tournament.mode)) {
+        const nbPoules = pouleConfig.poules.length;
+        const resolved = await resolveDistance(tournament, nbPoules, { db });
+        if (resolved.distance == null) {
+          return res.status(400).json({
+            error: `Impossible de déterminer la distance pour ce tournoi Quilles : ${resolved.warning || 'configuration incomplète'}. Vérifiez la matrice 5Q (et nb_tables) ou la distance fixe 9Q dans les paramètres du tournoi.`
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[DdJ generate-poules] Quilles validation error:', e.message);
+    }
+
     // Run the serpentine
     const poules = distributeSerpentine(sorted, pouleConfig.poules);
 
@@ -1321,9 +1371,13 @@ function buildPouleClassement(players, matches, settings) {
  *  - live classement per poule
  */
 async function loadPouleMatches(db, orgId, tournoiId) {
+  // V 2.0.791 — SELECT extended with Quilles columns so the downstream
+  // resolveDistance() call can find them.
   const tournament = await new Promise((resolve, reject) => {
     db.get(
-      `SELECT tournoi_id, nom, mode, categorie, debut, lieu, tournament_number
+      `SELECT tournoi_id, nom, mode, categorie, debut, lieu, tournament_number,
+              tournament_format, tournament_type, tour_number,
+              distance_matrix_id, fixed_distance, nb_tables
        FROM tournoi_ext
        WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
       [tournoiId, orgId],
@@ -1366,6 +1420,37 @@ async function loadPouleMatches(db, orgId, tournoiId) {
     if (override && override.reprises != null) gameParams.reprises = override.reprises;
   } catch (e) {
     // Non-fatal — DdJ screen works without the reference strip, just no clamping
+  }
+
+  // V 2.0.791 — Sprint 2 D.2: for Quilles tournaments, override the
+  // carambole game_parameters lookup with resolveDistance(). Reprises is
+  // forced to null so the match screen doesn't render a reprises field.
+  try {
+    const { isQuillesMode, resolveDistance } = require('../utils/quilles-helpers');
+    if (isQuillesMode(tournament.mode)) {
+      const nbPoulesRow = await new Promise((resolve) => {
+        db.get(
+          `SELECT COUNT(DISTINCT poule_number)::int AS n
+             FROM convocation_poules
+            WHERE tournoi_id = $1`,
+          [tournoiId],
+          (err, r) => resolve(err ? null : r)
+        );
+      });
+      const nbPoules = nbPoulesRow?.n || null;
+      const resolved = await resolveDistance(tournament, nbPoules, { db });
+      gameParams = {
+        distance: resolved.distance,
+        distance_reduite: null,
+        reprises: null,
+        moyenne_mini: null,
+        moyenne_maxi: null,
+        _quilles_source: resolved.source,
+        _quilles_warning: resolved.warning || null
+      };
+    }
+  } catch (e) {
+    console.error('[DdJ loadPouleMatches] Quilles resolveDistance error:', e.message);
   }
 
   // Load poule composition ordered canonically
