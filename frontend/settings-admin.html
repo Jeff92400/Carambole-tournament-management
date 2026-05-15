@@ -2141,6 +2141,23 @@
         </label>
       </div>
 
+      <!-- V 2.0.768 — Module Jeux avec Quilles (5Q / 9Q) toggle -->
+      <div style="margin-top: 15px; padding: 20px; background: #fdeae8; border-radius: 12px; border-left: 5px solid #c8102e;">
+        <label style="display: flex; align-items: center; gap: 14px; cursor: pointer;">
+          <input type="checkbox" id="enableQuillesModule" style="width: 22px; height: 22px; cursor: pointer; accent-color: #c8102e; flex-shrink: 0;">
+          <div>
+            <strong style="font-size: 15px; color: #c8102e;">Module Jeux avec Quilles (5Q / 9Q)</strong>
+            <p style="margin: 4px 0 0; color: #666; font-size: 12px;">
+              Active les disciplines <strong>5 Quilles</strong> et <strong>9 Quilles (Goriziana)</strong> :
+              matrice de distances éditable, format tournoi sur 1 journée, champ « points subis »,
+              adaptation du Directeur de Jeu, classement de Ligue spécifique.
+              Utile pour les Ligues régionales organisant les Quilles et les CDBs proposant
+              du Quilles local.
+            </p>
+          </div>
+        </label>
+      </div>
+
       <div style="margin-top: 20px;">
         <button onclick="saveQualificationSettings()" class="btn" style="background: #28a745; padding: 12px 25px;">
           Enregistrer
@@ -6663,6 +6680,12 @@
             ddjCheckbox.checked = settings.enable_ddj_module === 'true';
           }
 
+          // V 2.0.768 — Load Quilles module toggle
+          const quillesCheckbox = document.getElementById('enableQuillesModule');
+          if (quillesCheckbox) {
+            quillesCheckbox.checked = settings.enable_quilles_module === 'true';
+          }
+
           // Load degradation setting
           const degradationCheckbox = document.getElementById('positionPointsDegradation');
           if (degradationCheckbox) {
@@ -6734,7 +6757,8 @@
             scoring_avg_tier_3: document.getElementById('bonusTier3') ? document.getElementById('bonusTier3').value : '3',
             position_points_degradation: document.getElementById('positionPointsDegradation').checked ? 'last_player' : 'none',
             enable_split_tournaments: document.getElementById('enableSplitTournaments').checked ? 'true' : 'false',
-            enable_ddj_module: document.getElementById('enableDdjModule') ? (document.getElementById('enableDdjModule').checked ? 'true' : 'false') : undefined
+            enable_ddj_module: document.getElementById('enableDdjModule') ? (document.getElementById('enableDdjModule').checked ? 'true' : 'false') : undefined,
+            enable_quilles_module: document.getElementById('enableQuillesModule') ? (document.getElementById('enableQuillesModule').checked ? 'true' : 'false') : undefined
           })
         });
 
