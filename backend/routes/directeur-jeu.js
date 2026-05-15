@@ -765,7 +765,16 @@ router.post('/competitions/:id/poules/generate', authenticateToken, requireDdJ, 
     const everyoneHasPoule = players.every(p =>
       p.convocation_poule_number != null && p.convocation_poule_number > 0
     );
-    if (convokedTotal > 0 && players.length === convokedTotal && everyoneHasPoule) {
+    // V 2.0.803 — Sprint 2 G follow-up: Quilles tournaments never have
+    // pre-assigned poules (the admin "Convoquer" button stores poule_number=1
+    // as a pure placeholder so the pointage screen finds the players). Force
+    // the serpentine path for Quilles so 17 players don't end up in a single
+    // poule because the "everyone has poule" preserved-composition heuristic
+    // fires on the placeholder. Carambole tournaments keep the preserved
+    // behaviour — admins legitimately pre-assign poules before the DdJ day.
+    const { isQuillesMode: _isQ_genPoules } = require('../utils/quilles-helpers');
+    const skipPreservedForQuilles = _isQ_genPoules(tournament.mode);
+    if (!skipPreservedForQuilles && convokedTotal > 0 && players.length === convokedTotal && everyoneHasPoule) {
       // Group by convocation poule_number, preserving in-poule order.
       const byPoule = new Map();
       for (const p of players) {
