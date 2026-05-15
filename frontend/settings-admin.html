@@ -2179,11 +2179,27 @@
       </div>
       <div class="accordion-body">
         <p style="margin-bottom: 16px; color: #555; font-size: 14px;">
-          Les matrices définissent la <strong>distance de jeu</strong> (nombre de points pour gagner un match) en fonction du <strong>nombre de tables disponibles</strong> et du <strong>nombre de poules</strong> du tournoi 5 Quilles. Le 9 Quilles utilise une distance fixe (400 points) configurée directement sur le tournoi — pas besoin de matrice.
+          Les matrices définissent la <strong>distance de jeu</strong> (nombre de points pour gagner un match) en fonction du <strong>nombre de tables disponibles</strong> et du <strong>nombre de poules</strong> du tournoi 5 Quilles. Le 9 Quilles utilise une distance fixe configurée directement sur le tournoi — pas besoin de matrice.
         </p>
         <p style="margin-bottom: 16px; color: #555; font-size: 13px;">
           Versionnez vos matrices avec <code>active_from</code> / <code>active_to</code> pour suivre les évolutions du règlement LBIF en cours de saison sans casser les tournois historiques.
         </p>
+
+        <!-- V 2.0.774 — Default distance for 9 Quilles tournaments (variable per-org) -->
+        <div style="margin-bottom: 20px; padding: 14px 16px; background: #fff8e1; border-left: 4px solid #c8102e; border-radius: 4px;">
+          <label for="quilles9qDefaultDistance" style="display: block; font-weight: 600; color: #333; margin-bottom: 6px;">
+            Distance par défaut 9 Quilles (Goriziana) :
+          </label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="number" id="quilles9qDefaultDistance" min="50" max="1000" step="50"
+                   style="width: 120px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 15px;"
+                   placeholder="400">
+            <span style="color: #666; font-size: 13px;">points</span>
+          </div>
+          <p style="margin: 8px 0 0 0; color: #777; font-size: 12px;">
+            Valeur pré-remplie lors de la création d'un tournoi 9 Quilles. La règle LBIF fixe cette distance à <strong>400 points</strong>, mais vous pouvez l'ajuster (ex. 200 pour un tournoi d'initiation). Modifiable par tournoi.
+          </p>
+        </div>
 
         <div id="quillesMatricesList" style="margin-top: 16px;">
           <!-- Liste des matrices, chargée dynamiquement -->
@@ -6719,6 +6735,12 @@
             quillesCheckbox.checked = settings.enable_quilles_module === 'true';
           }
 
+          // V 2.0.774 — Load 9Q default distance
+          const quilles9qDist = document.getElementById('quilles9qDefaultDistance');
+          if (quilles9qDist) {
+            quilles9qDist.value = settings.quilles_9q_default_distance || '400';
+          }
+
           // Load degradation setting
           const degradationCheckbox = document.getElementById('positionPointsDegradation');
           if (degradationCheckbox) {
@@ -6791,7 +6813,8 @@
             position_points_degradation: document.getElementById('positionPointsDegradation').checked ? 'last_player' : 'none',
             enable_split_tournaments: document.getElementById('enableSplitTournaments').checked ? 'true' : 'false',
             enable_ddj_module: document.getElementById('enableDdjModule') ? (document.getElementById('enableDdjModule').checked ? 'true' : 'false') : undefined,
-            enable_quilles_module: document.getElementById('enableQuillesModule') ? (document.getElementById('enableQuillesModule').checked ? 'true' : 'false') : undefined
+            enable_quilles_module: document.getElementById('enableQuillesModule') ? (document.getElementById('enableQuillesModule').checked ? 'true' : 'false') : undefined,
+            quilles_9q_default_distance: document.getElementById('quilles9qDefaultDistance') ? (document.getElementById('quilles9qDefaultDistance').value || '400') : undefined
           })
         });
 

@@ -102,7 +102,14 @@ const defaults = {
   // tournaments later) get the 5Q/9Q modes, the distance matrix UI, the
   // single-day-bracket tournament type, and the Quilles-specific DdJ flow.
   // Existing CDBs (CDBHS, CDB 93-94) see no change.
-  enable_quilles_module: 'false'
+  enable_quilles_module: 'false',
+
+  // V 2.0.774 — Default distance for 9 Quilles (Goriziana) tournaments.
+  // The LBIF regulation fixes this at 400 points but admins may want to
+  // override (e.g. introductory tournaments at 200). Variable per tournament
+  // via tournoi_ext.fixed_distance ; this setting is the default that
+  // pre-fills the tournament creation form when the mode is 9Q.
+  quilles_9q_default_distance: '400'
 };
 
 /**
