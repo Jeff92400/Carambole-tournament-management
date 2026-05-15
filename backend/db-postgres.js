@@ -2501,6 +2501,26 @@ async function initializeDatabase() {
       ON CONFLICT (code) DO NOTHING
     `);
 
+    // V 2.0.780 — Clean up duplicate Quilles game_modes rows.
+    // The canonical rows are (code='5Q', display_name='5 Quilles') and
+    // (code='9Q', display_name='9 Quilles'). Earlier manual inserts via
+    // the admin UI or pre-V 2.0.768 migrations created additional rows
+    // (e.g. code='5 QUILLES' or display_name='5Q'), visible as duplicate
+    // options in the mode dropdown of the tournament creation form.
+    // Idempotent: deletes nothing if no duplicates exist.
+    await client.query(`
+      DELETE FROM game_modes
+      WHERE id NOT IN (
+        SELECT id FROM game_modes
+        WHERE (code = '5Q' AND display_name = '5 Quilles')
+           OR (code = '9Q' AND display_name = '9 Quilles')
+      )
+      AND (
+        UPPER(code) IN ('5Q', '9Q', '5 QUILLES', '9 QUILLES', '5QUILLES', '9QUILLES')
+        OR UPPER(display_name) IN ('5Q', '9Q', '5 QUILLES', '9 QUILLES', '5QUILLES', '9QUILLES')
+      )
+    `);
+
     // Player rank columns specific to Quilles (text rank like R1/N1 for
     // compatibility, plus numeric ranking position for the Ligue-style
     // classement and a national-finalist flag — cf. Architecture-Cross-Org-

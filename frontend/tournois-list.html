@@ -617,6 +617,17 @@
         if (response.ok) {
           gameModesList = await response.json();
 
+          // V 2.0.780 — Deduplicate by canonical key (uppercased display_name
+          // with spaces collapsed). Defensive: prevents duplicate options if
+          // the game_modes table contains legacy rows (e.g. '5Q' + '5 QUILLES').
+          const _seen = new Set();
+          gameModesList = gameModesList.filter(gm => {
+            const key = (gm.display_name || gm.code || '').toUpperCase().replace(/\s+/g, '');
+            if (_seen.has(key)) return false;
+            _seen.add(key);
+            return true;
+          });
+
           // Use display_name for values - filter uses exact match
           // Populate filter dropdown
           const filterSelect = document.getElementById('modeFilter');
