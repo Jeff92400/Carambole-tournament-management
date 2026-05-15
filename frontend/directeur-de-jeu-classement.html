@@ -508,8 +508,11 @@
       // V 2.0.790 — Render Quilles banner above the header (no-op for carambole)
       if (typeof renderQuillesBanner === 'function') renderQuillesBanner(t);
 
+      // V 2.0.809 — Quilles: omit 'OPEN' sentinel from the title.
+      const _isQ_clas = typeof isQuillesMode === 'function' && isQuillesMode(t.mode);
+      const _titleCat_clas = _isQ_clas ? '' : (t.categorie || '');
       document.getElementById('tournamentTitle').textContent =
-        `${t.mode || ''} ${t.categorie || ''}${t.nom ? ' — ' + t.nom : ''}`.trim();
+        `${t.mode || ''} ${_titleCat_clas}${t.nom ? ' — ' + t.nom : ''}`.trim().replace(/\s+/g, ' ');
       document.getElementById('tournamentMeta').textContent =
         `${formatDate(t.debut)}${t.lieu ? ' · ' + t.lieu : ''}`;
       document.getElementById('tournamentParams').textContent = 'Étape 5 : Matchs de classement';

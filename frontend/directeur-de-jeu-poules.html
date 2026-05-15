@@ -394,8 +394,11 @@
       // V 2.0.790 — Render Quilles banner above the header (no-op for carambole)
       if (typeof renderQuillesBanner === 'function') renderQuillesBanner(t);
 
+      // V 2.0.809 — Quilles: omit the 'OPEN' sentinel categorie from the title.
+      const _isQ_poules = typeof isQuillesMode === 'function' && isQuillesMode(t.mode);
+      const _titleCat_poules = _isQ_poules ? '' : (t.categorie || '');
       document.getElementById('tournamentTitle').textContent =
-        `${t.mode || ''} ${t.categorie || ''}${t.nom ? ' — ' + t.nom : ''}`.trim();
+        `${t.mode || ''} ${_titleCat_poules}${t.nom ? ' — ' + t.nom : ''}`.trim().replace(/\s+/g, ' ');
       document.getElementById('tournamentMeta').textContent = formatDate(t.debut);
       document.getElementById('tournamentParams').textContent = `Saison ${t.season}`;
 
