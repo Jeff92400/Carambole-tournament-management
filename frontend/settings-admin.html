@@ -2215,6 +2215,41 @@
       </div>
     </div>
 
+    <!-- V 2.0.784 — Types de tournoi Quilles (CRUD) -->
+    <div class="accordion-panel admin-only" id="quillesTypesSection" data-settings-tab="competitions" style="display: none;">
+      <div class="accordion-header" onclick="toggleAccordion('quillesTypesSection')">
+        <div class="accordion-title">
+          <span class="accordion-icon">&#9654;</span>
+          <img src="images/quilles/quilles-icon.png" alt="" style="height: 28px; width: 28px; vertical-align: middle; margin-right: 8px; border-radius: 4px; object-fit: cover;">
+          <strong>Types de tournoi Quilles</strong>
+        </div>
+        <span class="accordion-summary" id="summary-quilles-types">Chargement…</span>
+      </div>
+      <div class="accordion-body">
+        <p style="margin-bottom: 14px; color: #555; font-size: 14px;">
+          Liste des types affichés dans le formulaire de création d'un tournoi Quilles (Régional, Qualificatif N1, Finale de Ligue…). Le <strong>code</strong> est utilisé en interne et ne peut pas être modifié après création. Le <strong>libellé</strong>, l'<strong>ordre d'affichage</strong> et l'<strong>activation</strong> sont éditables.
+        </p>
+
+        <div id="quillesTypesList" style="margin-top: 12px;">
+          <div style="text-align: center; padding: 16px; color: #999;">Chargement…</div>
+        </div>
+
+        <div style="margin-top: 16px; padding: 14px; background: #f5f7fa; border-radius: 6px;">
+          <div style="font-weight: 600; font-size: 13px; color: #333; margin-bottom: 10px;">Ajouter un type</div>
+          <div style="display: grid; grid-template-columns: 1fr 2fr 100px auto; gap: 8px; align-items: center;">
+            <input type="text" id="newTypeCode" placeholder="code (ex. coupe_europe)"
+                   style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+            <input type="text" id="newTypeName" placeholder="Libellé affiché (ex. Coupe d'Europe)"
+                   style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+            <input type="number" id="newTypeOrder" value="10" min="1" max="999"
+                   style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; text-align: center;"
+                   title="Ordre d'affichage">
+            <button onclick="addQuillesType()" class="btn" style="background: #c8102e; color: white; padding: 8px 16px; font-size: 13px; white-space: nowrap;">+ Ajouter</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Politique de Confidentialité Section - Admin Only -->
     <div class="accordion-panel admin-only" id="privacyPolicySection" data-settings-tab="organisation">
       <div class="accordion-header" onclick="toggleAccordion('privacyPolicySection')">
@@ -6969,11 +7004,14 @@
     // selon l'état du flag enable_quilles_module + chargement de la liste.
     async function refreshQuillesSection() {
       const section = document.getElementById('quillesMatricesSection');
+      const typesSection = document.getElementById('quillesTypesSection');
       const checkbox = document.getElementById('enableQuillesModule');
       if (!section) return;
 
       const enabled = checkbox && checkbox.checked;
       section.style.display = enabled ? '' : 'none';
+      if (typesSection) typesSection.style.display = enabled ? '' : 'none';
+      if (enabled) refreshQuillesTypes();
       if (!enabled) return;
 
       // Charger la liste des matrices
@@ -7047,6 +7085,112 @@
         alert('✅ Matrice supprimée.');
       } catch (e) {
         alert(`❌ Erreur : ${e.message}`);
+      }
+    }
+
+    // V 2.0.784 — CRUD for Quilles tournament types
+    async function refreshQuillesTypes() {
+      const container = document.getElementById('quillesTypesList');
+      const summary = document.getElementById('summary-quilles-types');
+      if (!container) return;
+      try {
+        const resp = await fetch(`${API_URL}/settings/quilles-tournament-types`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!resp.ok) throw new Error('Erreur ' + resp.status);
+        const types = await resp.json();
+
+        if (!types.length) {
+          container.innerHTML = `<div style="padding: 14px; background: #fef9e7; border: 1px dashed #f1c40f; border-radius: 6px; color: #7d6608; text-align: center; font-size: 13px;">Aucun type configuré.</div>`;
+          if (summary) summary.textContent = '0 type';
+          return;
+        }
+
+        container.innerHTML = `
+          <div style="display: grid; grid-template-columns: 1fr 2fr 90px 80px 130px; gap: 8px; align-items: center; padding: 8px 10px; background: #2c3e50; color: white; font-size: 11px; font-weight: 700; text-transform: uppercase; border-radius: 6px 6px 0 0;">
+            <div>Code</div><div>Libellé</div><div style="text-align: center;">Ordre</div><div style="text-align: center;">Actif</div><div></div>
+          </div>
+        ` + types.map(t => `
+          <div style="display: grid; grid-template-columns: 1fr 2fr 90px 80px 130px; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid #e0e0e0; border-top: none; background: white;">
+            <div style="font-family: monospace; color: #666; font-size: 12px;">${escapeHtml(t.code)}</div>
+            <input type="text" id="qtt_name_${t.id}" value="${escapeHtml(t.display_name)}"
+                   style="padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+            <input type="number" id="qtt_order_${t.id}" value="${t.display_order || 10}" min="1" max="999"
+                   style="padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; text-align: center;">
+            <label style="display: flex; justify-content: center; align-items: center;">
+              <input type="checkbox" id="qtt_active_${t.id}" ${t.is_active ? 'checked' : ''}
+                     style="width: 18px; height: 18px; accent-color: #c8102e; cursor: pointer;">
+            </label>
+            <div style="display: flex; gap: 6px;">
+              <button onclick="saveQuillesType(${t.id})" class="btn" style="background: #1F4788; color: white; padding: 5px 10px; font-size: 11px; flex: 1;">💾</button>
+              <button onclick="deleteQuillesType(${t.id}, '${escapeHtml(t.display_name).replace(/'/g, '&#39;')}')" class="btn" style="background: #dc3545; color: white; padding: 5px 10px; font-size: 11px;">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+
+        if (summary) summary.textContent = `${types.length} type${types.length > 1 ? 's' : ''}`;
+      } catch (e) {
+        console.error('[Quilles types] error:', e);
+        container.innerHTML = `<div style="padding: 14px; background: #fde8e8; border-radius: 6px; color: #c0392b;">❌ ${e.message}</div>`;
+      }
+    }
+
+    async function addQuillesType() {
+      const code = document.getElementById('newTypeCode').value.trim();
+      const display_name = document.getElementById('newTypeName').value.trim();
+      const display_order = parseInt(document.getElementById('newTypeOrder').value, 10) || 10;
+      if (!code || !display_name) {
+        alert('Code et libellé sont obligatoires.');
+        return;
+      }
+      try {
+        const resp = await fetch(`${API_URL}/settings/quilles-tournament-types`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, display_name, display_order, is_active: true })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur ' + resp.status);
+        document.getElementById('newTypeCode').value = '';
+        document.getElementById('newTypeName').value = '';
+        document.getElementById('newTypeOrder').value = '10';
+        await refreshQuillesTypes();
+      } catch (e) {
+        alert('❌ ' + e.message);
+      }
+    }
+
+    async function saveQuillesType(id) {
+      const display_name = document.getElementById(`qtt_name_${id}`).value.trim();
+      const display_order = parseInt(document.getElementById(`qtt_order_${id}`).value, 10) || 10;
+      const is_active = document.getElementById(`qtt_active_${id}`).checked;
+      if (!display_name) { alert('Le libellé ne peut pas être vide.'); return; }
+      try {
+        const resp = await fetch(`${API_URL}/settings/quilles-tournament-types/${id}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display_name, display_order, is_active })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur ' + resp.status);
+        await refreshQuillesTypes();
+      } catch (e) {
+        alert('❌ ' + e.message);
+      }
+    }
+
+    async function deleteQuillesType(id, name) {
+      if (!confirm(`Supprimer le type « ${name} » ?\n\nSi des tournois l'utilisent, la suppression sera refusée — désactivez-le plutôt.`)) return;
+      try {
+        const resp = await fetch(`${API_URL}/settings/quilles-tournament-types/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur ' + resp.status);
+        await refreshQuillesTypes();
+      } catch (e) {
+        alert('❌ ' + e.message);
       }
     }
 

@@ -2777,6 +2777,124 @@ router.delete('/distance-matrices/:id', authenticateToken, requireAdmin, async (
   }
 });
 
+// ============================================================================
+// V 2.0.784 — CRUD endpoints for Quilles tournament types
+// Admin can add/rename/reorder/deactivate types (régional, qualif_n1, ...)
+// from the Settings UI. Reference data is global (not org-scoped) since the
+// LBIF type catalogue is the same for every Ligue.
+// ============================================================================
+
+// GET — list all types (admin: include inactive; reference-data endpoint
+// for the dropdown filters by is_active=TRUE).
+router.get('/quilles-tournament-types', authenticateToken, async (req, res) => {
+  const db = getDb();
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, code, display_name, display_order, is_active, created_at
+           FROM quilles_tournament_types
+           ORDER BY display_order, display_name`,
+        [],
+        (err, r) => err ? reject(err) : resolve(r || [])
+      );
+    });
+    res.json(rows);
+  } catch (err) {
+    console.error('[quilles-tournament-types GET] error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST — create
+router.post('/quilles-tournament-types', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const { code, display_name, display_order, is_active } = req.body || {};
+  if (!code || !display_name) {
+    return res.status(400).json({ error: 'code et display_name sont obligatoires' });
+  }
+  // Normalise code: lowercase, underscores instead of spaces
+  const normalizedCode = String(code).trim().toLowerCase().replace(/\s+/g, '_');
+  try {
+    const row = await new Promise((resolve, reject) => {
+      db.get(
+        `INSERT INTO quilles_tournament_types (code, display_name, display_order, is_active)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [normalizedCode, display_name, display_order || 10, is_active !== false],
+        (err, r) => err ? reject(err) : resolve(r)
+      );
+    });
+    res.json({ success: true, id: row?.id });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: `Le code « ${normalizedCode} » existe déjà.` });
+    }
+    console.error('[quilles-tournament-types POST] error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT — update (display_name, display_order, is_active). Code is immutable
+// because tournoi_ext.tournament_type holds the code as a string FK-by-value.
+router.put('/quilles-tournament-types/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID invalide' });
+  const { display_name, display_order, is_active } = req.body || {};
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE quilles_tournament_types
+            SET display_name = COALESCE($1, display_name),
+                display_order = COALESCE($2, display_order),
+                is_active = COALESCE($3, is_active)
+          WHERE id = $4`,
+        [display_name || null, display_order || null, is_active === undefined ? null : is_active, id],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[quilles-tournament-types PUT] error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE — refuse if any tournoi_ext still references the code.
+router.delete('/quilles-tournament-types/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID invalide' });
+  try {
+    const target = await new Promise((resolve, reject) => {
+      db.get(`SELECT code FROM quilles_tournament_types WHERE id = $1`, [id],
+        (err, r) => err ? reject(err) : resolve(r));
+    });
+    if (!target) return res.status(404).json({ error: 'Type introuvable' });
+
+    const refCount = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(*)::int AS n FROM tournoi_ext WHERE tournament_type = $1`,
+        [target.code],
+        (err, r) => err ? reject(err) : resolve(r?.n || 0)
+      );
+    });
+    if (refCount > 0) {
+      return res.status(409).json({
+        error: `Ce type est utilisé par ${refCount} tournoi(s). Désactivez-le plutôt que de le supprimer, ou réassignez les tournois.`
+      });
+    }
+
+    await new Promise((resolve, reject) => {
+      db.run(`DELETE FROM quilles_tournament_types WHERE id = $1`, [id],
+        (err) => err ? reject(err) : resolve());
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[quilles-tournament-types DELETE] error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
 module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;
