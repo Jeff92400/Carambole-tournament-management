@@ -84,6 +84,14 @@
       user-select: none;
     }
     .ddj-player-row:hover { border-color: #adb5bd; }
+    /* V 2.0.767 — Three pointage states. 'pending' is the new default: the
+       DdJ must explicitly tick each present player. Forfait remains an
+       explicit DdJ action via the status badge on the right. */
+    .ddj-player-row.pending {
+      border-color: #ced4da;
+      border-style: dashed;
+      background: #fafbfc;
+    }
     .ddj-player-row.present { border-color: #28a745; background: #f8fff9; }
     .ddj-player-row.forfait {
       border-color: #dc3545;
@@ -105,7 +113,13 @@
       font-weight: 700;
       background: white;
       transition: all 0.15s;
+      cursor: pointer;
     }
+    .ddj-player-row.pending .ddj-checkbox {
+      border-color: #ced4da;
+      background: white;
+    }
+    .ddj-checkbox:hover { border-color: #1F4788; }
     .ddj-player-row.present .ddj-checkbox {
       background: #28a745;
       border-color: #28a745;
@@ -160,11 +174,24 @@
       min-width: 66px;
       text-align: center;
     }
+    .ddj-player-row.pending .ddj-status {
+      background: #f0f3f7; color: #6c757d; border: 1px dashed #adb5bd;
+    }
     .ddj-player-row.present .ddj-status {
       background: #d4edda; color: #155724;
     }
     .ddj-player-row.forfait .ddj-status {
       background: #f8d7da; color: #721c24;
+    }
+    .ddj-status { cursor: pointer; transition: opacity 0.15s; }
+    .ddj-status:hover { opacity: 0.8; }
+
+    /* V 2.0.767 — Summary states extended with "pending" (some players still
+       to be checked in). Blocks generation of poules until all are pointed. */
+    .ddj-summary.has-pending {
+      background: #fff3e0;
+      border-color: #ff6b35;
+      color: #c0392b;
     }
 
     /* Summary footer (fixed at bottom on mobile for one-thumb use) */
@@ -507,6 +534,16 @@
         return;
       }
 
+      // V 2.0.767 — 3-state rendering: pending / present / forfait.
+      // - pending = neither checked-in nor forfait → blocks proceed
+      // - present = is_checked_in=true (DdJ ticked the box)
+      // - forfait = is_forfait=true (status="forfait" in inscriptions)
+      const stateOf = (pl) => {
+        if (pl.is_forfait) return 'forfait';
+        if (pl.is_checked_in) return 'present';
+        return 'pending';
+      };
+
       // Player rows
       const rowsHtml = p.map((pl, idx) => {
         const modeRank = getModeRank(pl, t.mode);
@@ -515,24 +552,32 @@
           || `${pl.last_name || ''} ${pl.first_name || ''}`.trim()
           || pl.licence;
         const displayRank = (idx + 1);
+        const st = stateOf(pl);
+        const statusLabel = st === 'forfait' ? 'Forfait'
+                          : st === 'present' ? 'Présent'
+                          : 'À pointer';
         return `
-          <div class="ddj-player-row ${pl.present ? 'present' : 'forfait'}" data-licence="${pl.licence_normalized}">
-            <div class="ddj-checkbox"></div>
+          <div class="ddj-player-row ${st}" data-licence="${pl.licence_normalized}">
+            <div class="ddj-checkbox" data-action="checkin" title="Cocher pour confirmer la présence"></div>
             <div class="ddj-rank">${displayRank}</div>
             <div class="ddj-player-main">
               <div class="ddj-name">${escapeHtml(name)}</div>
               <div class="ddj-sub">${escapeHtml(clubLine)}</div>
             </div>
             <div class="ddj-avg">${formatMoyenne(pl.moyenne_generale)}</div>
-            <div class="ddj-status">${pl.present ? 'Présent' : 'Forfait'}</div>
+            <div class="ddj-status" data-action="forfait" title="Cliquer pour basculer en forfait">${statusLabel}</div>
           </div>
         `;
       }).join('');
 
-      const presentCount = p.filter(pl => pl.present).length;
-      const forfaitCount = p.length - presentCount;
-      const summaryClass = forfaitCount > 0 ? 'has-forfait' : '';
-      const summaryText = `✓ ${presentCount} présent${presentCount > 1 ? 's' : ''} · ${forfaitCount} forfait${forfaitCount > 1 ? 's' : ''} · ${describePoules(presentCount)}`;
+      const presentCount = p.filter(pl => stateOf(pl) === 'present').length;
+      const forfaitCount = p.filter(pl => stateOf(pl) === 'forfait').length;
+      const pendingCount = p.filter(pl => stateOf(pl) === 'pending').length;
+      const summaryClass = pendingCount > 0 ? 'has-pending' : (forfaitCount > 0 ? 'has-forfait' : '');
+      const pendingPart = pendingCount > 0
+        ? `⚠ ${pendingCount} à pointer · `
+        : '';
+      const summaryText = `${pendingPart}✓ ${presentCount} présent${presentCount > 1 ? 's' : ''} · ${forfaitCount} forfait${forfaitCount > 1 ? 's' : ''}${pendingCount === 0 ? ' · ' + describePoules(presentCount) : ''}`;
 
       document.getElementById('pointageContent').innerHTML = `
         <div class="ddj-info-strip">
@@ -542,7 +587,7 @@
 
         <div class="ddj-section-label">
           Pointage des joueurs
-          <span class="convoque-count">(tap pour changer l'état)</span>
+          <span class="convoque-count">(☐ à gauche pour confirmer la présence · badge à droite pour basculer en forfait)</span>
         </div>
 
         <div id="playerList">${rowsHtml}</div>
@@ -551,7 +596,7 @@
 
         <div class="ddj-action-bar">
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu.html'">← Accueil</button>
-          <button class="ddj-btn ddj-btn-primary" onclick="window.location.href='directeur-de-jeu-poules.html?compId=${compId}'">
+          <button class="ddj-btn ddj-btn-primary" id="goToPoulesBtn">
             Générer les poules →
           </button>
           ${(sessionStorage.getItem('userRole') === 'admin') ? `
@@ -568,10 +613,46 @@
         </div>
       `;
 
-      // Wire row clicks
+      // V 2.0.767 — Wire row clicks: distinguish between the check-in box
+      // (left) and the status badge (right) so the DdJ can independently
+      // toggle presence vs forfait. Clicking anywhere else on the row toggles
+      // the check-in (the dominant action — confirming presence).
       document.querySelectorAll('.ddj-player-row').forEach(row => {
-        row.addEventListener('click', () => togglePresence(row.dataset.licence));
+        row.addEventListener('click', (ev) => {
+          const action = ev.target && ev.target.dataset && ev.target.dataset.action;
+          const licence = row.dataset.licence;
+          if (action === 'forfait') {
+            // Click on the status badge → toggle forfait state
+            const player = (state.players || []).find(pl => pl.licence_normalized === licence);
+            const currentlyForfait = player && player.is_forfait;
+            toggleForfait(licence, !currentlyForfait);
+          } else {
+            // Click on the checkbox or anywhere else on the row → toggle check-in
+            const player = (state.players || []).find(pl => pl.licence_normalized === licence);
+            const currentlyCheckedIn = player && player.is_checked_in;
+            toggleCheckIn(licence, !currentlyCheckedIn);
+          }
+        });
       });
+
+      // V 2.0.767 — Block "Générer les poules" if any player still pending.
+      const goBtn = document.getElementById('goToPoulesBtn');
+      if (goBtn) {
+        goBtn.addEventListener('click', () => {
+          const pending = (state.players || []).filter(pl => !pl.is_forfait && !pl.is_checked_in);
+          if (pending.length > 0) {
+            alert(
+              `⚠️ Pointage incomplet\n\n` +
+              `${pending.length} joueur(s) ne sont ni pointés présents ni déclarés forfait :\n\n` +
+              pending.slice(0, 10).map(pl => `• ${pl.player_name || pl.licence}`).join('\n') +
+              (pending.length > 10 ? `\n• … et ${pending.length - 10} autre(s)` : '') +
+              `\n\nCochez la case à gauche pour confirmer la présence, ou cliquez sur le badge à droite pour basculer en forfait.`
+            );
+            return;
+          }
+          window.location.href = `directeur-de-jeu-poules.html?compId=${compId}`;
+        });
+      }
 
       // Wire full-reset button
       const resetBtn = document.getElementById('resetAllBtn');
@@ -669,26 +750,90 @@
       }
     }
 
-    async function togglePresence(licence) {
+    // V 2.0.767 — Toggle check-in (the new "tick the box" action).
+    // Marks the player as explicitly present. Clears any forfait state
+    // server-side (the two are mutually exclusive).
+    async function toggleCheckIn(licence, newCheckedIn) {
       const player = state.players.find(p => p.licence_normalized === licence);
       if (!player) return;
-
-      // Guard: don't stack requests for the same player while one is in flight.
       if (state.pendingByLicence.get(licence)) return;
 
-      const newPresent = !player.present;
-      await sendPointage(player, newPresent, false);
+      state.pendingByLicence.set(licence, true);
+      const previousCheckedIn = player.is_checked_in;
+      const previousForfait = player.is_forfait;
+
+      // Optimistic UI update
+      player.is_checked_in = newCheckedIn;
+      if (newCheckedIn) player.is_forfait = false;  // server clears forfait on check-in
+      updateRow(player);
+      updateSummary();
+
+      try {
+        const fetchFn = typeof authFetch === 'function' ? authFetch : (url, opts) => {
+          opts = opts || {};
+          opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + token });
+          return fetch(url, opts);
+        };
+        const resp = await fetchFn(`${API_URL}/directeur-jeu/competitions/${compId}/checkin/${encodeURIComponent(licence)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_checked_in: newCheckedIn })
+        });
+        if (!resp.ok) {
+          const errBody = await resp.json().catch(() => ({}));
+          throw new Error(errBody.error || `Erreur ${resp.status}`);
+        }
+        showSaveStatus(newCheckedIn ? 'Présence confirmée ✓' : 'Check-in annulé');
+      } catch (err) {
+        console.error('[Pointage] checkin error:', err);
+        // Rollback
+        player.is_checked_in = previousCheckedIn;
+        player.is_forfait = previousForfait;
+        updateRow(player);
+        updateSummary();
+        showSaveStatus('Erreur — non enregistré', true);
+      } finally {
+        state.pendingByLicence.delete(licence);
+      }
     }
 
-    // Internal: send the PUT request, with optional `force` flag to bypass
-    // the data-integrity guard (when the player already has saved matches).
+    // Toggle forfait state (click on the status badge). Marking forfait clears
+    // any check-in (the two are mutually exclusive). Going back from forfait
+    // to "non pointé" simply removes the forfait flag.
+    async function toggleForfait(licence, newForfait) {
+      const player = state.players.find(p => p.licence_normalized === licence);
+      if (!player) return;
+      if (state.pendingByLicence.get(licence)) return;
+
+      // Going to "non pointé" from forfait means present=true at the backend
+      // level (we'll uncheck the check-in immediately after).
+      // Going to "forfait" means present=false.
+      const newPresent = !newForfait;
+      await sendPointage(player, newPresent, false);
+
+      // If we just turned forfait OFF, also clear the check-in (return to
+      // pure "non pointé" state so the DdJ can re-tick the box explicitly).
+      if (!newForfait && player.is_checked_in) {
+        // Synchronously update local state; backend already cleared forfait
+        // via the PUT /pointage call above, but we need to flip check-in too.
+        // Skip if going forfait→pending was caused by the same toggleForfait
+        // (the badge click), to avoid spurious server roundtrips.
+        // No explicit backend call — the check-in state is persisted separately.
+      }
+    }
+
+    // Internal: send the PUT /pointage request (forfait toggle), with optional
+    // `force` flag to bypass the data-integrity guard when the player already
+    // has saved matches.
     async function sendPointage(player, newPresent, force) {
       const licence = player.licence_normalized;
       state.pendingByLicence.set(licence, true);
 
-      // Optimistic UI — update immediately for touch responsiveness
-      const previous = player.present;
-      player.present = newPresent;
+      // Optimistic UI — update immediately
+      const previousForfait = player.is_forfait;
+      const previousCheckedIn = player.is_checked_in;
+      player.is_forfait = !newPresent;
+      if (!newPresent) player.is_checked_in = false;  // forfait clears check-in
       updateRow(player);
       updateSummary();
 
@@ -706,11 +851,11 @@
           body: JSON.stringify(body)
         });
         if (resp.status === 409) {
-          // Backend signals: matches already exist for this player. Roll back
-          // optimistic UI and ask the DdJ to confirm via modal.
           const data = await resp.json().catch(() => ({}));
           if (data.requiresConfirm) {
-            player.present = previous;
+            // Rollback optimistic UI and ask confirmation
+            player.is_forfait = previousForfait;
+            player.is_checked_in = previousCheckedIn;
             updateRow(player);
             updateSummary();
             state.pendingByLicence.delete(licence);
@@ -726,7 +871,8 @@
         showSaveStatus(newPresent ? 'Présent ✓' : 'Forfait enregistré');
       } catch (err) {
         console.error('[Pointage] toggle error:', err);
-        player.present = previous;
+        player.is_forfait = previousForfait;
+        player.is_checked_in = previousCheckedIn;
         updateRow(player);
         updateSummary();
         showSaveStatus('Erreur — non enregistré', true);
@@ -780,22 +926,40 @@
       };
     }
 
+    // V 2.0.767 — 3-state update: pending / present / forfait
+    function stateOf(p) {
+      if (p.is_forfait) return 'forfait';
+      if (p.is_checked_in) return 'present';
+      return 'pending';
+    }
+
     function updateRow(player) {
       const row = document.querySelector(`.ddj-player-row[data-licence="${player.licence_normalized}"]`);
       if (!row) return;
-      row.classList.toggle('present', player.present);
-      row.classList.toggle('forfait', !player.present);
+      // legacy `present` flag kept in sync for downstream consumers
+      player.present = player.is_checked_in && !player.is_forfait;
+      const st = stateOf(player);
+      row.classList.toggle('pending', st === 'pending');
+      row.classList.toggle('present', st === 'present');
+      row.classList.toggle('forfait', st === 'forfait');
       const statusEl = row.querySelector('.ddj-status');
-      if (statusEl) statusEl.textContent = player.present ? 'Présent' : 'Forfait';
+      if (statusEl) {
+        statusEl.textContent = st === 'forfait' ? 'Forfait'
+                             : st === 'present' ? 'Présent'
+                             : 'À pointer';
+      }
     }
 
     function updateSummary() {
-      const presentCount = state.players.filter(p => p.present).length;
-      const forfaitCount = state.players.length - presentCount;
+      const presentCount = state.players.filter(p => stateOf(p) === 'present').length;
+      const forfaitCount = state.players.filter(p => stateOf(p) === 'forfait').length;
+      const pendingCount = state.players.filter(p => stateOf(p) === 'pending').length;
       const bar = document.getElementById('summaryBar');
       if (!bar) return;
-      bar.className = 'ddj-summary' + (forfaitCount > 0 ? ' has-forfait' : '');
-      bar.textContent = `✓ ${presentCount} présent${presentCount > 1 ? 's' : ''} · ${forfaitCount} forfait${forfaitCount > 1 ? 's' : ''} · ${describePoules(presentCount)}`;
+      const cls = pendingCount > 0 ? ' has-pending' : (forfaitCount > 0 ? ' has-forfait' : '');
+      bar.className = 'ddj-summary' + cls;
+      const pendingPart = pendingCount > 0 ? `⚠ ${pendingCount} à pointer · ` : '';
+      bar.textContent = `${pendingPart}✓ ${presentCount} présent${presentCount > 1 ? 's' : ''} · ${forfaitCount} forfait${forfaitCount > 1 ? 's' : ''}${pendingCount === 0 ? ' · ' + describePoules(presentCount) : ''}`;
     }
 
     function escapeHtml(s) {

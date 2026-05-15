@@ -1295,6 +1295,23 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_convocation_poules_tournoi ON convocation_poules(tournoi_id)
     `);
 
+    // V 2.0.767 (2026-05-15) — DdJ check-in inversion. The pointage screen now
+    // requires the Directeur de Jeu to explicitly tick each present player
+    // (instead of defaulting everyone to "present"). Necessary for large
+    // tournaments (LBIF Quilles: 20-30 players called one-by-one). The forfait
+    // workflow is unchanged; both states are stored independently to support
+    // the 3-state pointage UI (non pointé / présent / forfait). Default FALSE
+    // means existing convocations remain untouched and admins must complete
+    // pointage before generating poules.
+    await client.query(`
+      ALTER TABLE convocation_poules
+      ADD COLUMN IF NOT EXISTS is_checked_in BOOLEAN DEFAULT FALSE
+    `);
+    await client.query(`
+      ALTER TABLE convocation_poules
+      ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMP
+    `);
+
     // Convocation files archive table (stores PDF versions)
     await client.query(`
       CREATE TABLE IF NOT EXISTS convocation_files (

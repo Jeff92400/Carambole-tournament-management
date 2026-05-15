@@ -205,6 +205,8 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
            cp.club,
            cp.poule_number,
            cp.player_order,
+           cp.is_checked_in,
+           cp.checked_in_at,
            p.first_name, p.last_name,
            p.rank_libre, p.rank_cadre, p.rank_bande, p.rank_3bandes,
            i.inscription_id,
@@ -242,6 +244,15 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
     const NON_PARTICIPATING_STATUTS = new Set(['forfait', 'désinscrit', 'indisponible']);
     const enriched = players.map(p => {
       const isForfait = NON_PARTICIPATING_STATUTS.has(p.statut) || p.forfait === 1;
+      // V 2.0.767 — Explicit 3-state pointage:
+      //   is_checked_in=true → joueur confirmé présent par le DdJ
+      //   isForfait=true     → joueur déclaré forfait (legacy flow)
+      //   ni l'un ni l'autre → "non pointé" (bloquera le passage à l'étape suivante)
+      // `present` remains for backward-compat with downstream consumers (poule
+      // generation, classement). A checked-in player is present. A forfait is
+      // not. An un-pointed player is treated as "not present" for poule
+      // generation purposes — admins must complete pointage first.
+      const isCheckedIn = p.is_checked_in === true || p.is_checked_in === 't' || p.is_checked_in === 1;
       return {
         licence: p.licence,
         licence_normalized: normLicence(p.licence),
@@ -255,13 +266,11 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
         rank_cadre: p.rank_cadre,
         rank_bande: p.rank_bande,
         rank_3bandes: p.rank_3bandes,
-        // Moyenne exposed as moyenne_generale (legacy field name the front-
-        // end already renders). Actual value comes from the
-        // player_ffb_classifications table, joined on (licence, mode, season).
-        // Null when this player has no FFB classification for this mode+season
-        // yet — front end renders "—" via formatMoyenne().
         moyenne_generale: p.moyenne_ffb,
-        present: !isForfait,
+        is_checked_in: isCheckedIn,
+        is_forfait: isForfait,
+        present: isCheckedIn && !isForfait,  // legacy: present only if explicitly checked in
+        checked_in_at: p.checked_in_at,
         commentaire: p.commentaire || null
       };
     });
@@ -423,12 +432,26 @@ router.put('/competitions/:id/pointage/:licence', authenticateToken, requireDdJ,
         [newStatut, newForfait, tournoiId, licence, orgId],
         function(err) {
           if (err) return reject(err);
-          // Row count is not uniformly reported between SQLite/PG adapters,
-          // so best-effort: we treat a non-error response as success.
           resolve({ updated: true });
         }
       );
     });
+
+    // V 2.0.767 — Mutual exclusivity: marking a player forfait clears any
+    // explicit check-in so the 3-state pointage UI stays coherent. Going
+    // back to "inscrit" (present=true) does NOT auto-tick the box — the
+    // DdJ must explicitly check-in via the /checkin endpoint.
+    if (present === false) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE convocation_poules
+           SET is_checked_in = FALSE, checked_in_at = NULL
+           WHERE tournoi_id = $1 AND REPLACE(licence, ' ', '') = $2`,
+          [tournoiId, licence],
+          function(err) { if (err) return reject(err); resolve(); }
+        );
+      });
+    }
 
     // Log to activity_logs for the audit trail used by admin pages.
     try {
@@ -457,6 +480,105 @@ router.put('/competitions/:id/pointage/:licence', authenticateToken, requireDdJ,
   } catch (err) {
     console.error('[DdJ] /pointage PUT error:', err);
     res.status(500).json({ error: 'Erreur lors de la mise à jour du pointage' });
+  }
+});
+
+// PUT /api/directeur-jeu/competitions/:id/checkin/:licence
+// V 2.0.767 — Toggle the explicit "checked in" flag on a convoked player.
+// Body: { is_checked_in: true|false }
+//
+// This is distinct from the forfait toggle (PUT /pointage/:licence above) so
+// the DdJ can independently mark presence and forfait. The pointage screen
+// uses 3 visual states: non pointé / présent (checked in) / forfait. Marking
+// a player checked-in clears any forfait status (the two states are mutually
+// exclusive — a player can't be both present and forfait).
+router.put('/competitions/:id/checkin/:licence', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  const licence = normLicence(req.params.licence);
+  const { is_checked_in } = req.body || {};
+
+  if (!Number.isFinite(tournoiId)) {
+    return res.status(400).json({ error: 'ID tournoi invalide' });
+  }
+  if (!licence) {
+    return res.status(400).json({ error: 'Licence manquante' });
+  }
+  if (typeof is_checked_in !== 'boolean') {
+    return res.status(400).json({ error: '`is_checked_in` doit être un booléen' });
+  }
+
+  try {
+    // Verify the tournament belongs to the caller's org
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id FROM tournoi_ext
+         WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, row) => err ? reject(err) : resolve(row)
+      );
+    });
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournoi introuvable' });
+    }
+
+    // Update the convocation_poules row(s) for this (tournoi, licence) — a
+    // player may have one row per poule in split tournaments, all should
+    // reflect the same check-in state.
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE convocation_poules
+         SET is_checked_in = $1,
+             checked_in_at = CASE WHEN $1 = TRUE THEN CURRENT_TIMESTAMP ELSE NULL END
+         WHERE tournoi_id = $2 AND REPLACE(licence, ' ', '') = $3`,
+        [is_checked_in, tournoiId, licence],
+        function(err) { if (err) return reject(err); resolve(); }
+      );
+    });
+
+    // If checking in, clear any existing forfait state on the inscription so
+    // the two flags stay coherent. (Marking forfait separately is still the
+    // explicit DdJ action via PUT /pointage above.)
+    if (is_checked_in === true) {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE inscriptions
+           SET statut = 'inscrit', forfait = 0
+           WHERE tournoi_id = $1 AND REPLACE(licence, ' ', '') = $2
+             AND statut = 'forfait'
+             AND ($3::int IS NULL OR organization_id = $3)`,
+          [tournoiId, licence, orgId],
+          function(err) { if (err) return reject(err); resolve(); }
+        );
+      });
+    }
+
+    // Audit log
+    try {
+      await new Promise((resolve) => {
+        db.run(
+          `INSERT INTO activity_logs
+             (licence, user_name, action_type, action_status,
+              target_type, target_id, target_name, details, app_source)
+           VALUES ($1, $2, $3, 'success', 'inscription', $4, $5, $6, 'directeur_jeu')`,
+          [
+            licence,
+            req.user.username || 'DdJ',
+            is_checked_in ? 'ddj_checkin_present' : 'ddj_checkin_uncheck',
+            tournoiId,
+            licence,
+            JSON.stringify({ tournoi_id: tournoiId, is_checked_in, triggered_by: req.user.userId })
+          ],
+          () => resolve()
+        );
+      });
+    } catch (e) { /* non-fatal */ }
+
+    res.json({ success: true, licence, is_checked_in });
+  } catch (err) {
+    console.error('[DdJ] /checkin PUT error:', err);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour du check-in' });
   }
 });
 
