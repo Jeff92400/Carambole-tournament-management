@@ -2210,7 +2210,7 @@
           <button onclick="openMatrixEditor()" class="btn" style="background: #c8102e; padding: 10px 20px; color: white;">
             + Créer une nouvelle matrice
           </button>
-          <span style="color: #999; font-size: 12px; font-style: italic;">L'éditeur de grille s'ouvre dans un modal (étape A3 — disponible bientôt)</span>
+          <span style="color: #666; font-size: 12px; font-style: italic;">Définissez la distance pour chaque combinaison (tables × poules).</span>
         </div>
       </div>
     </div>
@@ -7030,10 +7030,7 @@
       }
     }
 
-    // Stub: A3 will implement the actual grid editor modal
-    function openMatrixEditor(matrixId) {
-      alert(`📋 Éditeur matrice ${matrixId ? '(id ' + matrixId + ')' : '(nouvelle)'} — disponible à l'étape A3.\n\nPour tester maintenant, utiliser l'API directement via la console :\nPOST /api/settings/distance-matrices`);
-    }
+    // V 2.0.775 — openMatrixEditor() is defined later in the page (matrix editor modal script block)
 
     async function deleteMatrix(id, name) {
       if (!confirm(`Supprimer la matrice « ${name} » ?\n\nCette action est définitive.`)) return;
@@ -7717,6 +7714,304 @@
       </div>
     </div>
   </div>
+
+  <!-- V 2.0.775 — Matrix Editor Modal for Quilles 5Q distance matrices (A3) -->
+  <div id="matrixEditorModal" class="bareme-modal-overlay" onclick="if(event.target === this) closeMatrixEditor()">
+    <div class="bareme-modal-content" style="max-width: 920px;">
+      <div class="bareme-modal-header" style="background: linear-gradient(135deg, #c8102e 0%, #8b0000 100%);">
+        <h3 id="matrixEditorTitle">Éditer la matrice de distance</h3>
+        <button class="bareme-modal-close" onclick="closeMatrixEditor()">&times;</button>
+      </div>
+      <div class="bareme-modal-body">
+        <div id="matrixEditorError" style="display: none; margin-bottom: 14px; padding: 10px 14px; background: #fde8e8; border-left: 4px solid #c0392b; color: #c0392b; border-radius: 4px; font-size: 13px;"></div>
+
+        <!-- Metadata -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; font-weight: 600; font-size: 13px; color: #555; margin-bottom: 4px;">Nom de la matrice *</label>
+            <input type="text" id="mxName" placeholder="Ex. LBIF 5Q 2026-27" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+          </div>
+          <div>
+            <label style="display: block; font-weight: 600; font-size: 13px; color: #555; margin-bottom: 4px;">Version (optionnel)</label>
+            <input type="text" id="mxVersion" placeholder="Ex. v1, règlement nov 2026" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+          </div>
+          <div>
+            <label style="display: block; font-weight: 600; font-size: 13px; color: #555; margin-bottom: 4px;">Active à partir du</label>
+            <input type="date" id="mxActiveFrom" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+          </div>
+          <div>
+            <label style="display: block; font-weight: 600; font-size: 13px; color: #555; margin-bottom: 4px;">Active jusqu'au (vide = en cours)</label>
+            <input type="date" id="mxActiveTo" style="width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+          </div>
+        </div>
+
+        <!-- Grid dimensions -->
+        <div style="padding: 12px 14px; background: #f5f7fa; border-radius: 6px; margin-bottom: 14px;">
+          <div style="font-weight: 600; font-size: 13px; color: #333; margin-bottom: 10px;">Dimensions de la grille</div>
+          <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+            <label style="font-size: 13px; color: #555;">
+              Tables : de
+              <input type="number" id="mxTablesMin" min="1" max="20" value="4" style="width: 60px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; margin: 0 4px;">
+              à
+              <input type="number" id="mxTablesMax" min="1" max="20" value="8" style="width: 60px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; margin-left: 4px;">
+            </label>
+            <label style="font-size: 13px; color: #555;">
+              Poules : de
+              <input type="number" id="mxPoulesMin" min="1" max="30" value="3" style="width: 60px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; margin: 0 4px;">
+              à
+              <input type="number" id="mxPoulesMax" min="1" max="30" value="15" style="width: 60px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; margin-left: 4px;">
+            </label>
+            <button type="button" onclick="renderMatrixGrid()" class="btn" style="background: #1F4788; color: white; padding: 6px 12px; font-size: 12px;">Régénérer la grille</button>
+          </div>
+        </div>
+
+        <!-- Quick-fill -->
+        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
+          <span style="font-size: 12px; color: #666; font-weight: 600;">Remplissage rapide :</span>
+          <button type="button" onclick="fillMatrix(80)" class="btn" style="background: #f0f0f0; color: #333; padding: 4px 10px; font-size: 12px;">Tout à 80</button>
+          <button type="button" onclick="fillMatrix(100)" class="btn" style="background: #f0f0f0; color: #333; padding: 4px 10px; font-size: 12px;">Tout à 100</button>
+          <button type="button" onclick="fillMatrix(120)" class="btn" style="background: #f0f0f0; color: #333; padding: 4px 10px; font-size: 12px;">Tout à 120</button>
+          <button type="button" onclick="fillMatrixLBIFDefault()" class="btn" style="background: #fff8e1; color: #8b0000; padding: 4px 10px; font-size: 12px; border: 1px solid #c8102e;">📋 Défauts LBIF 5Q</button>
+        </div>
+
+        <!-- Grid -->
+        <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 6px;">
+          <table id="mxGrid" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead><tr><th style="padding: 8px; background: #f5f7fa;">Tables \ Poules</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p style="margin: 10px 0 0; font-size: 11px; color: #888; font-style: italic;">
+          Chaque cellule = distance de jeu (points pour gagner un match) pour cette combinaison (tables, poules). Laisser vide pour ne pas définir cette combinaison.
+        </p>
+      </div>
+      <div class="bareme-modal-footer">
+        <button type="button" class="btn" onclick="closeMatrixEditor()" style="background: #6c757d; color: white; padding: 8px 20px;">Annuler</button>
+        <button type="button" class="btn" onclick="saveMatrix()" style="background: #c8102e; color: white; padding: 8px 20px; font-weight: 600;">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // V 2.0.775 — Matrix editor for 5Q distance matrices (Sprint 2 A3)
+    let _mxEditingId = null;          // null = creating, otherwise editing
+    let _mxGameMode5QId = null;        // game_modes.id for '5Q', loaded lazily
+
+    async function _mxResolve5QId() {
+      if (_mxGameMode5QId) return _mxGameMode5QId;
+      const resp = await fetch(`${API_URL}/reference-data/game-modes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!resp.ok) throw new Error('Impossible de charger les modes de jeu');
+      const modes = await resp.json();
+      const mode5q = modes.find(m => (m.code || '').toUpperCase() === '5Q');
+      if (!mode5q) throw new Error('Mode 5Q introuvable — vérifier la migration Quilles');
+      _mxGameMode5QId = mode5q.id;
+      return _mxGameMode5QId;
+    }
+
+    function _mxShowError(msg) {
+      const el = document.getElementById('matrixEditorError');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+    function _mxClearError() {
+      document.getElementById('matrixEditorError').style.display = 'none';
+    }
+
+    async function openMatrixEditor(matrixId) {
+      _mxClearError();
+      _mxEditingId = matrixId || null;
+      document.getElementById('matrixEditorTitle').textContent =
+        matrixId ? 'Éditer la matrice de distance' : 'Nouvelle matrice de distance 5Q';
+
+      // Reset to defaults
+      document.getElementById('mxName').value = '';
+      document.getElementById('mxVersion').value = '';
+      document.getElementById('mxActiveFrom').value = '';
+      document.getElementById('mxActiveTo').value = '';
+      document.getElementById('mxTablesMin').value = 4;
+      document.getElementById('mxTablesMax').value = 8;
+      document.getElementById('mxPoulesMin').value = 3;
+      document.getElementById('mxPoulesMax').value = 15;
+
+      // Load existing data if editing
+      let existingData = null;
+      if (matrixId) {
+        try {
+          const resp = await fetch(`${API_URL}/settings/distance-matrices`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const list = await resp.json();
+          const m = list.find(x => x.id === matrixId);
+          if (m) {
+            document.getElementById('mxName').value = m.name || '';
+            document.getElementById('mxVersion').value = m.version || '';
+            document.getElementById('mxActiveFrom').value = m.active_from ? m.active_from.split('T')[0] : '';
+            document.getElementById('mxActiveTo').value = m.active_to ? m.active_to.split('T')[0] : '';
+            existingData = m.matrix_data || {};
+            // Auto-compute dimensions from data
+            const tables = Object.keys(existingData).map(Number).filter(n => !isNaN(n));
+            if (tables.length) {
+              document.getElementById('mxTablesMin').value = Math.min(...tables);
+              document.getElementById('mxTablesMax').value = Math.max(...tables);
+              const poulesAll = [];
+              for (const t of tables) {
+                const row = existingData[t];
+                if (row && typeof row === 'object') {
+                  Object.keys(row).map(Number).filter(n => !isNaN(n)).forEach(p => poulesAll.push(p));
+                }
+              }
+              if (poulesAll.length) {
+                document.getElementById('mxPoulesMin').value = Math.min(...poulesAll);
+                document.getElementById('mxPoulesMax').value = Math.max(...poulesAll);
+              }
+            }
+          }
+        } catch (e) {
+          _mxShowError('Erreur de chargement : ' + e.message);
+        }
+      }
+
+      renderMatrixGrid(existingData);
+      document.getElementById('matrixEditorModal').style.display = 'flex';
+    }
+
+    function closeMatrixEditor() {
+      document.getElementById('matrixEditorModal').style.display = 'none';
+      _mxEditingId = null;
+    }
+
+    function renderMatrixGrid(prefillData) {
+      const tMin = parseInt(document.getElementById('mxTablesMin').value, 10);
+      const tMax = parseInt(document.getElementById('mxTablesMax').value, 10);
+      const pMin = parseInt(document.getElementById('mxPoulesMin').value, 10);
+      const pMax = parseInt(document.getElementById('mxPoulesMax').value, 10);
+
+      if (isNaN(tMin) || isNaN(tMax) || isNaN(pMin) || isNaN(pMax) || tMin > tMax || pMin > pMax) {
+        _mxShowError('Bornes invalides — vérifier les dimensions.');
+        return;
+      }
+      if ((tMax - tMin) > 15 || (pMax - pMin) > 25) {
+        _mxShowError('Plage trop large (max 16 tables, 26 poules).');
+        return;
+      }
+      _mxClearError();
+
+      // Collect existing values from current grid (preserve when regenerating)
+      const current = prefillData || _mxCollectGrid();
+
+      const grid = document.getElementById('mxGrid');
+      let html = '<thead><tr><th style="padding: 8px; background: #f5f7fa; position: sticky; left: 0; z-index: 2; border-right: 2px solid #c8102e;">Tables ↓ / Poules →</th>';
+      for (let p = pMin; p <= pMax; p++) {
+        html += `<th style="padding: 8px 6px; background: #f5f7fa; min-width: 60px; text-align: center; font-weight: 600;">${p}</th>`;
+      }
+      html += '</tr></thead><tbody>';
+      for (let t = tMin; t <= tMax; t++) {
+        html += `<tr><th style="padding: 8px; background: #fafafa; position: sticky; left: 0; z-index: 1; border-right: 2px solid #c8102e; text-align: center; font-weight: 600;">${t}</th>`;
+        for (let p = pMin; p <= pMax; p++) {
+          const val = (current[t] && current[t][p] != null) ? current[t][p] : '';
+          html += `<td style="padding: 2px; border: 1px solid #eee;">
+            <input type="number" data-table="${t}" data-poules="${p}" value="${val}" min="10" max="500" step="10"
+              style="width: 100%; padding: 6px 4px; border: 1px solid transparent; border-radius: 3px; text-align: center; font-size: 13px; background: transparent;"
+              onfocus="this.style.borderColor='#c8102e'; this.style.background='#fff8e1';"
+              onblur="this.style.borderColor='transparent'; this.style.background='transparent';">
+          </td>`;
+        }
+        html += '</tr>';
+      }
+      html += '</tbody>';
+      grid.innerHTML = html;
+    }
+
+    function _mxCollectGrid() {
+      const data = {};
+      const inputs = document.querySelectorAll('#mxGrid input[type="number"]');
+      inputs.forEach(inp => {
+        const t = inp.dataset.table;
+        const p = inp.dataset.poules;
+        const v = inp.value.trim();
+        if (v !== '') {
+          const n = parseInt(v, 10);
+          if (!isNaN(n) && n > 0) {
+            if (!data[t]) data[t] = {};
+            data[t][p] = n;
+          }
+        }
+      });
+      return data;
+    }
+
+    function fillMatrix(value) {
+      const inputs = document.querySelectorAll('#mxGrid input[type="number"]');
+      inputs.forEach(inp => { inp.value = value; });
+    }
+
+    // LBIF 5Q reference matrix (typical values — admin should adjust if règlement evolves)
+    // Distance increases as poules decrease (more matches per player → longer match needed for fair ranking)
+    function fillMatrixLBIFDefault() {
+      const inputs = document.querySelectorAll('#mxGrid input[type="number"]');
+      inputs.forEach(inp => {
+        const p = parseInt(inp.dataset.poules, 10);
+        // Heuristic: small poule count → long distance, many poules → short distance
+        let dist = 80;
+        if (p <= 4) dist = 120;
+        else if (p <= 6) dist = 100;
+        else dist = 80;
+        inp.value = dist;
+      });
+    }
+
+    async function saveMatrix() {
+      _mxClearError();
+      const name = document.getElementById('mxName').value.trim();
+      const version = document.getElementById('mxVersion').value.trim();
+      const activeFrom = document.getElementById('mxActiveFrom').value || null;
+      const activeTo = document.getElementById('mxActiveTo').value || null;
+      const matrixData = _mxCollectGrid();
+
+      if (!name) { _mxShowError('Le nom de la matrice est obligatoire.'); return; }
+      if (Object.keys(matrixData).length === 0) {
+        _mxShowError('La matrice est vide — saisir au moins une valeur de distance.');
+        return;
+      }
+      if (activeFrom && activeTo && activeFrom > activeTo) {
+        _mxShowError('La date de début doit précéder la date de fin.');
+        return;
+      }
+
+      try {
+        const gameModeId = await _mxResolve5QId();
+        const payload = {
+          name,
+          game_mode_id: gameModeId,
+          version: version || null,
+          matrix_data: matrixData,
+          active_from: activeFrom,
+          active_to: activeTo
+        };
+
+        const url = _mxEditingId
+          ? `${API_URL}/settings/distance-matrices/${_mxEditingId}`
+          : `${API_URL}/settings/distance-matrices`;
+        const method = _mxEditingId ? 'PUT' : 'POST';
+
+        const resp = await fetch(url, {
+          method,
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `Erreur ${resp.status}`);
+
+        closeMatrixEditor();
+        await refreshQuillesSection();
+        alert(`✅ Matrice ${_mxEditingId ? 'mise à jour' : 'créée'}.`);
+      } catch (e) {
+        _mxShowError(e.message);
+      }
+    }
+  </script>
 
   <script src="js/help-button.js?v=203"></script>
   <script src="js/upcoming-tournaments.js?v=236"></script>
