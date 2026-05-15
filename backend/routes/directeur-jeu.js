@@ -1475,11 +1475,13 @@ async function loadPouleMatches(db, orgId, tournoiId) {
   // tell apart "not started" / "in progress" / "finished" without relying
   // solely on score presence.
   const savedRows = await new Promise((resolve, reject) => {
+    // V 2.0.793 — Sprint 2 D.3: p1_points_subis / p2_points_subis added to
+    // the SELECT (Quilles-only fields seeded V 2.0.768, null for carambole).
     db.all(
       `SELECT id, poule_number, match_number, table_number,
               p1_licence, p2_licence,
-              p1_points, p1_reprises, p1_serie,
-              p2_points, p2_reprises, p2_serie,
+              p1_points, p1_reprises, p1_serie, p1_points_subis,
+              p2_points, p2_reprises, p2_serie, p2_points_subis,
               referee_name, referee_licence,
               entered_at, started_at, finished_at
        FROM ddj_poule_matches
@@ -1537,9 +1539,11 @@ async function loadPouleMatches(db, orgId, tournoiId) {
         p1_points: saved ? saved.p1_points : null,
         p1_reprises: saved ? saved.p1_reprises : null,
         p1_serie: saved ? saved.p1_serie : null,
+        p1_points_subis: saved ? saved.p1_points_subis : null,
         p2_points: saved ? saved.p2_points : null,
         p2_reprises: saved ? saved.p2_reprises : null,
         p2_serie: saved ? saved.p2_serie : null,
+        p2_points_subis: saved ? saved.p2_points_subis : null,
         // V 2.0.707 — expose persisted referee so the UI can pre-fill the
         // input on reload (was being saved but never read back, which
         // looked like a "not persisted" bug to the DdJ).
@@ -1683,7 +1687,13 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
   }
 
   // Basic sanity checks on scores
-  const scoreFields = ['p1_points', 'p1_reprises', 'p1_serie', 'p2_points', 'p2_reprises', 'p2_serie'];
+  // V 2.0.793 — Sprint 2 D.3: p1_points_subis / p2_points_subis added for
+  // Quilles matches (loser's accumulated score). Carambole matches leave
+  // them null. Same positive-integer-or-null parsing as the other fields.
+  const scoreFields = [
+    'p1_points', 'p1_reprises', 'p1_serie', 'p1_points_subis',
+    'p2_points', 'p2_reprises', 'p2_serie', 'p2_points_subis'
+  ];
   const parsed = {};
   for (const f of scoreFields) {
     const v = b[f];
@@ -1760,33 +1770,34 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
     //     match is considered "in progress" if started_at IS NOT NULL
     //     AND finished_at IS NULL (see tables-status endpoint).
     // UPSERT the match
+    // V 2.0.793 — p1_points_subis / p2_points_subis (Quilles loser's score)
+    // added to INSERT + DO UPDATE. Null for carambole matches.
     await new Promise((resolve, reject) => {
       db.run(
         `INSERT INTO ddj_poule_matches
            (tournoi_id, poule_number, match_number, table_number,
             p1_licence, p2_licence,
-            p1_points, p1_reprises, p1_serie,
-            p2_points, p2_reprises, p2_serie,
+            p1_points, p1_reprises, p1_serie, p1_points_subis,
+            p2_points, p2_reprises, p2_serie, p2_points_subis,
             entered_at, entered_by,
             referee_name, referee_licence,
             started_at, finished_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                 CURRENT_TIMESTAMP, $13, $14, $15,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                 CURRENT_TIMESTAMP, $15, $16, $17,
                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (tournoi_id, poule_number, match_number)
          DO UPDATE SET
            -- V 2.0.700 — preserve the existing table_number when the
            -- caller didn't specify one (e.g. saveMatch payload omits it).
-           -- Was: table_number = EXCLUDED.table_number — which wiped the
-           -- auto-assigned table on every score save, leading to "Table ?"
-           -- in the post-save guidance message.
            table_number = COALESCE(EXCLUDED.table_number, ddj_poule_matches.table_number),
            p1_points = EXCLUDED.p1_points,
            p1_reprises = EXCLUDED.p1_reprises,
            p1_serie = EXCLUDED.p1_serie,
+           p1_points_subis = EXCLUDED.p1_points_subis,
            p2_points = EXCLUDED.p2_points,
            p2_reprises = EXCLUDED.p2_reprises,
            p2_serie = EXCLUDED.p2_serie,
+           p2_points_subis = EXCLUDED.p2_points_subis,
            entered_at = CURRENT_TIMESTAMP,
            entered_by = EXCLUDED.entered_by,
            referee_name = EXCLUDED.referee_name,
@@ -1796,8 +1807,8 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
         [
           tournoiId, pn, mn, tableNumber,
           match.p1_licence, match.p2_licence,
-          parsed.p1_points, parsed.p1_reprises, parsed.p1_serie,
-          parsed.p2_points, parsed.p2_reprises, parsed.p2_serie,
+          parsed.p1_points, parsed.p1_reprises, parsed.p1_serie, parsed.p1_points_subis,
+          parsed.p2_points, parsed.p2_reprises, parsed.p2_serie, parsed.p2_points_subis,
           req.user.userId || null,
           refereeName, refereeLicence
         ],

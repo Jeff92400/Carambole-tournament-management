@@ -1026,11 +1026,17 @@
       // Reference strip — show category's target distance + reprises max so
       // the DdJ sees "what the match is aiming for" at a glance. Same values
       // are used for input clamping below.
+      // V 2.0.793 — Sprint 2 D.3: Quilles tournaments have no reprises and
+      // no série; the strip shows only the distance.
       const dist = state.gameParams.distance;
       const rep = state.gameParams.reprises;
-      const paramStrip = (dist || rep)
-        ? `<div class="match-params-strip">🎯 Distance : ${dist ?? '?'} pts · Reprises max : ${rep ?? '?'}</div>`
-        : '';
+      const isQuillesT = typeof isQuillesMode === 'function'
+        && isQuillesMode(state.tournament && state.tournament.mode);
+      const paramStrip = isQuillesT
+        ? (dist ? `<div class="match-params-strip" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #c8102e;">🎯 Distance Quilles : ${dist} pts (match terminé quand le vainqueur atteint ce score)</div>` : '')
+        : ((dist || rep)
+            ? `<div class="match-params-strip">🎯 Distance : ${dist ?? '?'} pts · Reprises max : ${rep ?? '?'}</div>`
+            : '');
 
       // Compute live moyennes from the SAVED values (will be refreshed on-the-fly
       // by input handlers). points_per_repris = points / reprises, 3 decimals.
@@ -1100,6 +1106,7 @@
                   <input type="number" class="score-input" data-field="p1_points" inputmode="numeric" min="0"${maxPts}
                          value="${m.p1_points != null ? m.p1_points : ''}">
                 </div>
+                ${isQuillesT ? '' : `
                 <div class="score-row">
                   <span class="score-label">Reprises :</span>
                   <input type="number" class="score-input" data-field="p1_reprises" inputmode="numeric" min="0"${maxRep}
@@ -1111,6 +1118,7 @@
                          value="${m.p1_serie != null ? m.p1_serie : ''}">
                 </div>
                 ${moyenneP1Html}
+                `}
               </div>
               <div class="${col2Class}" data-side="p2">
                 <div class="score-col-header">${escapeHtml(m.p2_name)}</div>
@@ -1119,6 +1127,7 @@
                   <input type="number" class="score-input" data-field="p2_points" inputmode="numeric" min="0"${maxPts}
                          value="${m.p2_points != null ? m.p2_points : ''}">
                 </div>
+                ${isQuillesT ? '' : `
                 <div class="score-row">
                   <span class="score-label">Reprises :</span>
                   <input type="number" class="score-input" data-field="p2_reprises" inputmode="numeric" min="0"${maxRep}
@@ -1130,6 +1139,7 @@
                          value="${m.p2_serie != null ? m.p2_serie : ''}">
                 </div>
                 ${moyenneP2Html}
+                `}
               </div>
             </div>
 
@@ -1225,10 +1235,26 @@
         poule_number: pouleNumber,
         match_number: matchNumber
       };
+      // V 2.0.793 — Sprint 2 D.3: in Quilles mode, the reprises/série inputs
+      // are not rendered, so the querySelector() lookup returns null. Guard
+      // each field with a null check; null inputs map to null values.
       ['p1_points', 'p1_reprises', 'p1_serie', 'p2_points', 'p2_reprises', 'p2_serie'].forEach(f => {
         const input = card.querySelector(`[data-field="${f}"]`);
+        if (!input) { payload[f] = null; return; }
         payload[f] = input.value === '' ? null : parseInt(input.value, 10);
       });
+
+      // V 2.0.793 — Sprint 2 D.3: for Quilles matches, derive points_subis
+      // symmetrically. p1_points_subis = p2_points (and reciprocally) so the
+      // schema is fully populated for downstream consumers (bracket seeding,
+      // tournament_results aggregation, classement Ligue) without forcing
+      // the DdJ to type the same number twice.
+      const isQuillesSave = typeof isQuillesMode === 'function'
+        && isQuillesMode(state.tournament && state.tournament.mode);
+      if (isQuillesSave) {
+        payload.p1_points_subis = payload.p2_points;
+        payload.p2_points_subis = payload.p1_points;
+      }
 
       // V 2.0.692 — DdJ V3 : referee fields + table_number (re-sent so the
       // back-end keeps the assignment when nothing else has changed)
