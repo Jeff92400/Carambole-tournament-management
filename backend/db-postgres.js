@@ -2164,12 +2164,15 @@ async function initializeDatabase() {
       console.log('80 demo players created for CDB Démo');
     }
 
-    // Demo org settings (colors)
+    // Demo org settings (colors + Quilles enablement for dev/test)
     const demoSettings = [
       ['organization_name', 'Comité Départemental de Billard - Démonstration'],
       ['organization_short_name', 'CDB Démo'],
       ['primary_color', '#e65100'],
-      ['secondary_color', '#ff9800']
+      ['secondary_color', '#ff9800'],
+      // V 2.0.768 — CDB Démo is the dev/test playground for the Quilles
+      // module. Other orgs (CDBHS, CDB 93-94) keep the default 'false'.
+      ['enable_quilles_module', 'true']
     ];
     for (const [key, value] of demoSettings) {
       await client.query(`
@@ -2480,6 +2483,89 @@ async function initializeDatabase() {
       }
       console.log('Game modes initialized');
     }
+
+    // V 2.0.768 (2026-05-15) — Quilles module bootstrap (Sprint 1, schéma).
+    // Adds 5Q and 9Q to game_modes, the corresponding rank columns on
+    // players, and the Quilles-specific fields on tournoi_ext. Visible
+    // only to orgs with enable_quilles_module='true' (default false →
+    // CDBHS and CDB 93-94 see no change). See Initiatives/Quilles/ for the
+    // full plan and the Spec-Qualification-Cross-Tournoi.html design doc.
+    await client.query(`
+      INSERT INTO game_modes (code, display_name, color, display_order, rank_column)
+      VALUES ('5Q', '5 Quilles', '#c8102e', 5, 'rank_5q')
+      ON CONFLICT (code) DO NOTHING
+    `);
+    await client.query(`
+      INSERT INTO game_modes (code, display_name, color, display_order, rank_column)
+      VALUES ('9Q', '9 Quilles', '#8b0000', 6, 'rank_9q')
+      ON CONFLICT (code) DO NOTHING
+    `);
+
+    // Player rank columns specific to Quilles (text rank like R1/N1 for
+    // compatibility, plus numeric ranking position for the Ligue-style
+    // classement and a national-finalist flag — cf. Architecture-Cross-Org-
+    // Players-V3.html for the rationale of having both).
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS rank_5q TEXT`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS rank_9q TEXT`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS ranking_5q INTEGER`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS ranking_9q INTEGER`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_national_finalist_5q BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_national_finalist_9q BOOLEAN DEFAULT FALSE`);
+
+    // Tournament-level Quilles fields. Backwards compatible:
+    //   tournament_format='multi_week' covers the carambole flow (T1/T2/T3
+    //   over several weeks). 'single_day_bracket' is the Quilles flow
+    //   (everything in one day: pointage → poules → barrage → bracket).
+    //   tournament_type distinguishes 'regional', 'qualif_n1', 'finale_ligue'
+    //   so the bracket and qualification logic can branch on context.
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS tournament_format VARCHAR(30) DEFAULT 'multi_week'`);
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS tournament_type VARCHAR(30)`);
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS distance_matrix_id INTEGER`);
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS fixed_distance INTEGER`);
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS tour_number INTEGER`);
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS nb_tables INTEGER`);
+    await client.query(`ALTER TABLE tournoi_ext ADD COLUMN IF NOT EXISTS table_formats JSONB`);
+
+    // Distance matrix table (5Q): editable matrix nb_tables × nb_poules → distance.
+    // Versioned so admins can roll out new LBIF règlements without breaking
+    // historical tournaments. Active window via active_from / active_to.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS distance_matrices (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        game_mode_id INTEGER REFERENCES game_modes(id),
+        organization_id INTEGER REFERENCES organizations(id),
+        version VARCHAR(50),
+        matrix_data JSONB NOT NULL,
+        active_from DATE,
+        active_to DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_distance_matrices_org
+      ON distance_matrices(organization_id, game_mode_id)
+    `);
+
+    // Points subis = Quilles-specific stat (the opponent's score in the match).
+    // Added to tournament_results (final season-level aggregation) and to
+    // ddj_bracket_matches / ddj_poule_matches (per-match raw data).
+    await client.query(`ALTER TABLE tournament_results ADD COLUMN IF NOT EXISTS points_subis INTEGER`);
+    // ddj_poule_matches / ddj_bracket_matches added in their respective
+    // sections below (created earlier in the DdJ phase). We just guard:
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ddj_poule_matches') THEN
+          ALTER TABLE ddj_poule_matches ADD COLUMN IF NOT EXISTS p1_points_subis INTEGER;
+          ALTER TABLE ddj_poule_matches ADD COLUMN IF NOT EXISTS p2_points_subis INTEGER;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ddj_bracket_matches') THEN
+          ALTER TABLE ddj_bracket_matches ADD COLUMN IF NOT EXISTS p1_points_subis INTEGER;
+          ALTER TABLE ddj_bracket_matches ADD COLUMN IF NOT EXISTS p2_points_subis INTEGER;
+        END IF;
+      END $$;
+    `);
 
     // Create player_rankings table for dynamic game mode rankings
     // This table replaces the hardcoded rank_libre, rank_cadre, rank_bande, rank_3bandes columns

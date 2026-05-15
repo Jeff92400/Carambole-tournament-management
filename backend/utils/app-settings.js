@@ -94,7 +94,15 @@ const defaults = {
   // are blocked and logged to email_test_mode_log. Admin-facing communications
   // (recipient_kind='admin') are still sent. Used during CDB onboarding to let
   // the admin exercise every flow without spamming real competitors.
-  email_test_mode_enabled: 'false'
+  email_test_mode_enabled: 'false',
+
+  // Quilles module (per-org enablement, V 2.0.768 — May 2026).
+  // Default 'false' — only orgs that explicitly opt in (CDB Démo for dev,
+  // cdbidf for Ligue IDF production, and any CDB organising local Quilles
+  // tournaments later) get the 5Q/9Q modes, the distance matrix UI, the
+  // single-day-bracket tournament type, and the Quilles-specific DdJ flow.
+  // Existing CDBs (CDBHS, CDB 93-94) see no change.
+  enable_quilles_module: 'false'
 };
 
 /**
