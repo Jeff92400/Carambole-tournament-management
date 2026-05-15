@@ -100,7 +100,10 @@ router.get('/:tournoi_id/feed', async (req, res) => {
         tournament: {
           name: tournament.nom,
           date: tournament.debut,
-          location: tournament.lieu || null
+          location: tournament.lieu || null,
+          // V 2.0.808 — mode exposed in this branch too for consistency
+          // (TV layout reads it to detect Quilles).
+          mode: tournament.mode || null
         },
         session: null,
         poules: [], bracket: null, consolante: null,
