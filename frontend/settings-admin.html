@@ -7902,13 +7902,21 @@
       const current = prefillData || _mxCollectGrid();
 
       const grid = document.getElementById('mxGrid');
-      let html = '<thead><tr><th style="padding: 8px; background: #f5f7fa; position: sticky; left: 0; z-index: 2; border-right: 2px solid #c8102e;">Tables ↓ / Poules →</th>';
+      const colSpan = (pMax - pMin + 1);
+      // Top banner: "Nombre de poules"
+      let html = '<thead>';
+      html += `<tr>
+        <th style="padding: 0; background: white; border: none;"></th>
+        <th colspan="${colSpan}" style="padding: 6px 8px; background: #c8102e; color: white; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-align: center; text-transform: uppercase;">Nombre de poules →</th>
+      </tr>`;
+      // Column headers (poules numbers)
+      html += '<tr><th style="padding: 8px; background: #fff8e1; position: sticky; left: 0; z-index: 2; border-right: 2px solid #c8102e; border-bottom: 2px solid #c8102e; font-size: 11px; color: #8b0000; font-weight: 700;">Tables ↓<br>Poules →</th>';
       for (let p = pMin; p <= pMax; p++) {
-        html += `<th style="padding: 8px 6px; background: #f5f7fa; min-width: 60px; text-align: center; font-weight: 600;">${p}</th>`;
+        html += `<th style="padding: 8px 6px; background: #fff8e1; min-width: 60px; text-align: center; font-weight: 700; color: #8b0000; border-bottom: 2px solid #c8102e; font-size: 14px;">${p}</th>`;
       }
       html += '</tr></thead><tbody>';
       for (let t = tMin; t <= tMax; t++) {
-        html += `<tr><th style="padding: 8px; background: #fafafa; position: sticky; left: 0; z-index: 1; border-right: 2px solid #c8102e; text-align: center; font-weight: 600;">${t}</th>`;
+        html += `<tr><th style="padding: 8px; background: #fff8e1; position: sticky; left: 0; z-index: 1; border-right: 2px solid #c8102e; text-align: center; font-weight: 700; color: #8b0000; font-size: 14px;">${t}</th>`;
         for (let p = pMin; p <= pMax; p++) {
           const val = (current[t] && current[t][p] != null) ? current[t][p] : '';
           html += `<td style="padding: 2px; border: 1px solid #eee;">
