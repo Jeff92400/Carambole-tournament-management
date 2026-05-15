@@ -969,7 +969,10 @@
     // no such parent exists, fall back to creating them at the top level.
     // Idempotent: existing sub-folders with the same name are skipped.
     const MODE_SUBFOLDERS = [
-      { name: 'Libre',     icon: '🎱' },
+      // V 2.0.772 — Libre icon changed from American 8-ball to yellow circle
+      // (yellow being the carambole player ball). Regle CLAUDE.md "never use
+      // the American 8-ball emoji". Other modes keep their original icons.
+      { name: 'Libre',     icon: '🟡' },
       { name: 'Bande',     icon: '🎯' },
       { name: '3 Bandes',  icon: '🔁' },
       { name: 'Cadre',     icon: '⬛' }
