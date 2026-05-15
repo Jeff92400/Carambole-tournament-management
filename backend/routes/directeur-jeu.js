@@ -283,7 +283,7 @@ router.get('/competitions/:id/pointage', authenticateToken, requireDdJ, async (r
     try {
       const presentN = enriched.filter(p => p.present).length;
       if (presentN >= 2) {
-        const cfg = await getPouleConfigForOrg(presentN, orgId);
+        const cfg = await getPouleConfigForOrg(presentN, orgId, tournament.mode);
         if (cfg && Array.isArray(cfg.poules) && cfg.poules.length) {
           poulePreview = {
             count: cfg.poules.length,
@@ -744,7 +744,7 @@ router.post('/competitions/:id/poules/generate', authenticateToken, requireDdJ, 
       });
       // Reuse the same shape `getPouleConfigForOrg` would produce for
       // the description / tables count (best-effort, non-blocking).
-      const cfg = await getPouleConfigForOrg(players.length, orgId).catch(() => null);
+      const cfg = await getPouleConfigForOrg(players.length, orgId, tournament.mode).catch(() => null);
       const proposal = {
         tournament: {
           id: tournament.tournoi_id,
@@ -809,8 +809,10 @@ router.post('/competitions/:id/poules/generate', authenticateToken, requireDdJ, 
       sorted.sort((a, b) => (b.moyenne_ffb || 0) - (a.moyenne_ffb || 0));
     }
 
-    // Compute poule sizes using the org's allow_poule_of_2 setting
-    const pouleConfig = await getPouleConfigForOrg(sorted.length, orgId);
+    // Compute poule sizes using the org's allow_poule_of_2 setting.
+    // V 2.0.789 — mode passed so Quilles tournaments use the per-mode
+    // override (allow_poule_of_2_5q / allow_poule_of_2_9q).
+    const pouleConfig = await getPouleConfigForOrg(sorted.length, orgId, tournament.mode);
     if (!pouleConfig.poules || pouleConfig.poules.length === 0) {
       return res.status(400).json({
         error: `Pas assez de joueurs présents (${sorted.length} / min ${pouleConfig.minPlayers})`

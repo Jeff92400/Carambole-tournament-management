@@ -53,6 +53,11 @@ const defaults = {
 
   // Poule configuration
   allow_poule_of_2: 'false',
+  // V 2.0.789 — Per-mode override for Quilles. LBIF règlement may differ
+  // between 5Q and 9Q regarding 2-player poules; admins can set each
+  // independently. If unset, falls back to the global allow_poule_of_2.
+  allow_poule_of_2_5q: 'false',
+  allow_poule_of_2_9q: 'false',
 
   // Qualification mode (org-specific, should NOT inherit from global)
   qualification_mode: 'standard',

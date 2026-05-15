@@ -97,17 +97,29 @@ function computePouleConfiguration(numPlayers, allowPouleOf2 = false) {
  * V 2.0.747 — When numPlayers < single_poule_threshold, a single poule is forced
  * regardless of allow_poule_of_2 (e.g. 5 players → [5], not [3, 2]).
  *
+ * V 2.0.789 — Optional `mode` argument selects the per-mode override for
+ * Quilles (allow_poule_of_2_5q / allow_poule_of_2_9q). The LBIF règlement
+ * may differ between the two disciplines, hence the split. Carambole modes
+ * (or absence of mode) keep the global allow_poule_of_2.
+ *
  * @param {number} numPlayers
  * @param {number|null} orgId
+ * @param {string} [mode] - tournament mode ('5Q' / '9Q' / carambole)
  * @returns {Promise<{ poules: number[], tables: number, minPlayers: number, description: string }>}
  */
-async function getPouleConfigForOrg(numPlayers, orgId) {
+async function getPouleConfigForOrg(numPlayers, orgId, mode) {
   const appSettings = require('./app-settings');
+
+  // Determine the allow_poule_of_2 setting key based on mode
+  const modeUpper = String(mode || '').toUpperCase();
+  let allowKey = 'allow_poule_of_2';
+  if (modeUpper === '5Q' || modeUpper === '5 QUILLES') allowKey = 'allow_poule_of_2_5q';
+  else if (modeUpper === '9Q' || modeUpper === '9 QUILLES') allowKey = 'allow_poule_of_2_9q';
 
   const [rawAllow, rawThreshold] = await Promise.all([
     orgId
-      ? appSettings.getOrgSetting(orgId, 'allow_poule_of_2')
-      : appSettings.getSetting('allow_poule_of_2'),
+      ? appSettings.getOrgSetting(orgId, allowKey)
+      : appSettings.getSetting(allowKey),
     orgId
       ? appSettings.getOrgSetting(orgId, 'single_poule_threshold')
       : appSettings.getSetting('single_poule_threshold')

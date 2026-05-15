@@ -760,8 +760,16 @@ router.get('/poule-config-preview', authenticateToken, async (req, res) => {
 
     // V 2.0.754 — Read both settings together so the threshold is respected
     // when building the per-player-count lookup table used by generate-poules.html.
+    // V 2.0.789 — Optional ?mode= query param selects the Quilles per-mode
+    // override (allow_poule_of_2_5q / allow_poule_of_2_9q). Carambole modes
+    // (or absence) keep the global allow_poule_of_2.
+    const modeQ = String(req.query.mode || '').toUpperCase();
+    let allowKey = 'allow_poule_of_2';
+    if (modeQ === '5Q' || modeQ === '5 QUILLES') allowKey = 'allow_poule_of_2_5q';
+    else if (modeQ === '9Q' || modeQ === '9 QUILLES') allowKey = 'allow_poule_of_2_9q';
+
     const [raw, rawThreshold] = await Promise.all([
-      orgId ? appSettings.getOrgSetting(orgId, 'allow_poule_of_2') : appSettings.getSetting('allow_poule_of_2'),
+      orgId ? appSettings.getOrgSetting(orgId, allowKey) : appSettings.getSetting(allowKey),
       orgId ? appSettings.getOrgSetting(orgId, 'single_poule_threshold') : appSettings.getSetting('single_poule_threshold')
     ]);
     const allowPouleOf2 = raw === 'true';

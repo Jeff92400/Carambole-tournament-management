@@ -4521,7 +4521,9 @@ router.get('/tournoi/:id/simulation', authenticateToken, async (req, res) => {
       configDescription = `1 poule unique de ${playersWithRanks.length} joueurs (Finale - tous contre tous)`;
       finaleMatches = buildFinaleMatchSchedule(playersWithRanks.length, poules[0].players);
     } else {
-      const config = await getPouleConfigForOrg(playersWithRanks.length, orgId);
+      // V 2.0.789 — Pass tournament.mode so Quilles tournaments use the
+      // per-mode override (allow_poule_of_2_5q / allow_poule_of_2_9q).
+      const config = await getPouleConfigForOrg(playersWithRanks.length, orgId, tournament.mode);
       poules = distributeSimulationSerpentine(playersWithRanks, config.poules);
       configDescription = config.description;
     }

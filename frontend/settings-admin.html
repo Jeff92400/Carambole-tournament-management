@@ -2201,6 +2201,24 @@
           </p>
         </div>
 
+        <!-- V 2.0.789 — Per-mode allow_poule_of_2 (LBIF règlement varies between 5Q and 9Q) -->
+        <div style="margin-bottom: 20px; padding: 14px 16px; background: #f5f7fa; border-left: 4px solid #1F4788; border-radius: 4px;">
+          <div style="font-weight: 600; color: #333; margin-bottom: 10px;">Poules de 2 joueurs autorisées</div>
+          <p style="margin: 0 0 12px 0; color: #777; font-size: 12px;">
+            Si activé, le générateur de poules acceptera de former des poules de 2 joueurs (chaque joueur joue 2 matchs contre le même adversaire). Sinon, le minimum est 3 joueurs par poule. Réglable indépendamment pour 5Q et 9Q car la règle LBIF peut différer.
+          </p>
+          <div style="display: flex; gap: 24px; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="allowPouleOf2_5q" style="width: 18px; height: 18px; accent-color: #c8102e; cursor: pointer;">
+              <span style="font-weight: 600; font-size: 13px;">5 Quilles</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="allowPouleOf2_9q" style="width: 18px; height: 18px; accent-color: #8b0000; cursor: pointer;">
+              <span style="font-weight: 600; font-size: 13px;">9 Quilles</span>
+            </label>
+          </div>
+        </div>
+
         <div id="quillesMatricesList" style="margin-top: 16px;">
           <!-- Liste des matrices, chargée dynamiquement -->
           <div style="text-align: center; padding: 20px; color: #999;">Chargement…</div>
@@ -6776,6 +6794,12 @@
             quilles9qDist.value = settings.quilles_9q_default_distance || '400';
           }
 
+          // V 2.0.789 — Load per-mode allow_poule_of_2 toggles
+          const ap5q = document.getElementById('allowPouleOf2_5q');
+          if (ap5q) ap5q.checked = settings.allow_poule_of_2_5q === 'true';
+          const ap9q = document.getElementById('allowPouleOf2_9q');
+          if (ap9q) ap9q.checked = settings.allow_poule_of_2_9q === 'true';
+
           // Load degradation setting
           const degradationCheckbox = document.getElementById('positionPointsDegradation');
           if (degradationCheckbox) {
@@ -6849,7 +6873,10 @@
             enable_split_tournaments: document.getElementById('enableSplitTournaments').checked ? 'true' : 'false',
             enable_ddj_module: document.getElementById('enableDdjModule') ? (document.getElementById('enableDdjModule').checked ? 'true' : 'false') : undefined,
             enable_quilles_module: document.getElementById('enableQuillesModule') ? (document.getElementById('enableQuillesModule').checked ? 'true' : 'false') : undefined,
-            quilles_9q_default_distance: document.getElementById('quilles9qDefaultDistance') ? (document.getElementById('quilles9qDefaultDistance').value || '400') : undefined
+            quilles_9q_default_distance: document.getElementById('quilles9qDefaultDistance') ? (document.getElementById('quilles9qDefaultDistance').value || '400') : undefined,
+            // V 2.0.789 — Per-mode allow_poule_of_2 for Quilles
+            allow_poule_of_2_5q: document.getElementById('allowPouleOf2_5q') ? (document.getElementById('allowPouleOf2_5q').checked ? 'true' : 'false') : undefined,
+            allow_poule_of_2_9q: document.getElementById('allowPouleOf2_9q') ? (document.getElementById('allowPouleOf2_9q').checked ? 'true' : 'false') : undefined
           })
         });
 
