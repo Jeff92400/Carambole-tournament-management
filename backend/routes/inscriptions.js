@@ -2296,11 +2296,25 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
   }
 
   const orgId = req.user.organizationId || null;
-  const { nom, mode, categorie, taille, debut, grand_coin, taille_cadre, lieu, lieu_2, tournament_number } = req.body;
+  const {
+    nom, mode, categorie, taille, debut, grand_coin, taille_cadre,
+    lieu, lieu_2, tournament_number,
+    // V 2.0.779 — Quilles fields (Sprint 2 B). Optional, only used when
+    // the mode is 5Q or 9Q. Carambole tournaments leave these null and the
+    // app behaves exactly as before.
+    tournament_format, tournament_type, distance_matrix_id,
+    fixed_distance, nb_tables, tour_number
+  } = req.body;
 
   if (!nom || !mode || !categorie) {
     return res.status(400).json({ error: 'nom, mode, and categorie are required' });
   }
+
+  // Auto-derive tournament_format from mode if not explicitly set.
+  // Quilles (5Q/9Q) → single_day_bracket. Carambole modes → multi_week.
+  const modeUpper = String(mode || '').toUpperCase();
+  const isQuillesMode = modeUpper === '5Q' || modeUpper === '9Q';
+  const resolvedFormat = tournament_format || (isQuillesMode ? 'single_day_bracket' : 'multi_week');
 
   try {
     // Get the next tournoi_id — GLOBAL MAX, not org-scoped.
@@ -2319,12 +2333,25 @@ router.post('/tournoi', authenticateToken, async (req, res) => {
 
     const nextId = (maxIdResult?.max_id || 0) + 1;
 
-    // Insert the new tournament
+    // Insert the new tournament — include Quilles columns. They default to
+    // null for carambole tournaments (column-level DEFAULTs in the schema).
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT INTO tournoi_ext (tournoi_id, nom, mode, categorie, taille, debut, grand_coin, taille_cadre, lieu, lieu_2, tournament_number, organization_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      `, [nextId, nom, mode, categorie, taille || null, debut || null, grand_coin || 0, taille_cadre || null, lieu || null, lieu_2 || null, tournament_number || null, orgId], function(err) {
+        INSERT INTO tournoi_ext (
+          tournoi_id, nom, mode, categorie, taille, debut, grand_coin, taille_cadre,
+          lieu, lieu_2, tournament_number, organization_id,
+          tournament_format, tournament_type, distance_matrix_id,
+          fixed_distance, nb_tables, tour_number
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      `, [
+        nextId, nom, mode, categorie, taille || null, debut || null,
+        grand_coin || 0, taille_cadre || null, lieu || null, lieu_2 || null,
+        tournament_number || null, orgId,
+        resolvedFormat, tournament_type || null,
+        distance_matrix_id || null, fixed_distance || null,
+        nb_tables || null, tour_number || null
+      ], function(err) {
         if (err) reject(err);
         else resolve({ id: nextId, changes: this.changes });
       });
@@ -2413,7 +2440,14 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
 
   const orgId = req.user.organizationId || null;
   const { id } = req.params;
-  const { nom, mode, categorie, taille, debut, grand_coin, taille_cadre, lieu, lieu_2, status, notify_on_changes, tournament_number } = req.body;
+  const {
+    nom, mode, categorie, taille, debut, grand_coin, taille_cadre,
+    lieu, lieu_2, status, notify_on_changes, tournament_number,
+    // V 2.0.779 — Quilles fields (Sprint 2 B). Optional. COALESCE-pattern
+    // in the UPDATE preserves existing values when the client omits them.
+    tournament_format, tournament_type, distance_matrix_id,
+    fixed_distance, nb_tables, tour_number
+  } = req.body;
 
   try {
     // Get current tournament data to detect date change
@@ -2443,7 +2477,9 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     // Check if status is being changed to cancelled
     const statusChangedToCancelled = status === 'cancelled' && currentTournament.status !== 'cancelled';
 
-    // Update the tournament
+    // Update the tournament — include Quilles columns. COALESCE preserves
+    // existing values when the client omits the field (so legacy callers
+    // that only send carambole fields don't wipe out Quilles configuration).
     const query = `
       UPDATE tournoi_ext SET
         nom = $1,
@@ -2457,7 +2493,13 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
         lieu_2 = $9,
         status = $10,
         notify_on_changes = $11,
-        tournament_number = $12
+        tournament_number = $12,
+        tournament_format = COALESCE($15, tournament_format),
+        tournament_type = COALESCE($16, tournament_type),
+        distance_matrix_id = COALESCE($17, distance_matrix_id),
+        fixed_distance = COALESCE($18, fixed_distance),
+        nb_tables = COALESCE($19, nb_tables),
+        tour_number = COALESCE($20, tour_number)
       WHERE tournoi_id = $13
       AND ($14::int IS NULL OR organization_id = $14)
     `;
@@ -2468,7 +2510,14 @@ router.put('/tournoi/:id', authenticateToken, async (req, res) => {
     const newTournamentNumber = tournament_number !== undefined ? (tournament_number || null) : (currentTournament.tournament_number || null);
 
     await new Promise((resolve, reject) => {
-      db.run(query, [nom, mode, categorie, taille || null, debut || null, grand_coin || 0, taille_cadre, lieu, lieu_2 || null, newStatus, newNotifyOnChanges, newTournamentNumber, id, orgId], function(err) {
+      db.run(query, [
+        nom, mode, categorie, taille || null, debut || null, grand_coin || 0,
+        taille_cadre, lieu, lieu_2 || null, newStatus, newNotifyOnChanges,
+        newTournamentNumber, id, orgId,
+        tournament_format || null, tournament_type || null,
+        distance_matrix_id || null, fixed_distance || null,
+        nb_tables || null, tour_number || null
+      ], function(err) {
         if (err) reject(err);
         else resolve(this.changes);
       });

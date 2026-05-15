@@ -349,14 +349,69 @@
               </select>
             </div>
 
-            <div>
+            <div id="create_taille_wrapper">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Taille (distance)</label>
               <input type="number" id="create_taille" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Exemple : 280, 300...">
             </div>
 
-            <div>
+            <div id="create_taille_cadre_wrapper">
               <label style="display: block; margin-bottom: 5px; font-weight: bold;">Taille cadre</label>
               <input type="text" id="create_taille_cadre" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Exemple : 47/2, 71/2...">
+            </div>
+
+            <!-- V 2.0.779 — Quilles-specific fields (shown only when mode = 5Q or 9Q) -->
+            <div id="create_quilles_section" style="display: none; grid-column: 1 / -1; padding: 14px 16px; background: #fff8e1; border-left: 4px solid #c8102e; border-radius: 6px;">
+              <div style="font-weight: 700; color: #8b0000; font-size: 13px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Paramètres Quilles
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <!-- 9Q: fixed distance -->
+                <div id="create_fixed_distance_wrapper" style="display: none;">
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Distance fixe (9Q) *</label>
+                  <input type="number" id="create_fixed_distance" min="50" max="1000" step="50" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                  <p style="margin: 4px 0 0; font-size: 11px; color: #666;">Pré-rempli depuis la config de l'organisation. Modifiable.</p>
+                </div>
+
+                <!-- 5Q: distance matrix selector -->
+                <div id="create_matrix_wrapper" style="display: none;">
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Matrice de distance 5Q *</label>
+                  <select id="create_distance_matrix_id" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">-- Aucune matrice disponible --</option>
+                  </select>
+                  <p style="margin: 4px 0 0; font-size: 11px; color: #666;">Filtre par date d'activité. Gérer les matrices dans Paramètres.</p>
+                </div>
+
+                <!-- 5Q: nb_tables -->
+                <div id="create_nb_tables_wrapper" style="display: none;">
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Nombre de tables disponibles</label>
+                  <input type="number" id="create_nb_tables" min="1" max="20" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Ex. 6">
+                  <p style="margin: 4px 0 0; font-size: 11px; color: #666;">Sert au calcul de la distance via la matrice (cellule [tables × nb_poules]).</p>
+                </div>
+
+                <!-- Tournament type (Quilles only) -->
+                <div>
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Type de tournoi</label>
+                  <select id="create_tournament_type" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">-- Standard --</option>
+                    <option value="regional">Régional</option>
+                    <option value="qualif_n1">Qualificatif N1</option>
+                    <option value="finale_ligue">Finale de Ligue</option>
+                  </select>
+                </div>
+
+                <!-- Tour number (Quilles use TR1/TR2/TR3 instead of T1/T2/T3) -->
+                <div>
+                  <label style="display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px;">Numéro de tour (TR)</label>
+                  <select id="create_tour_number" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">-- Sélectionner --</option>
+                    <option value="1">TR1</option>
+                    <option value="2">TR2</option>
+                    <option value="3">TR3</option>
+                    <option value="4">TR4</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1577,10 +1632,119 @@
 
     // ==================== CREATE TOURNAMENT ====================
 
+    // V 2.0.779 — Quilles module state (loaded lazily on first openCreateModal)
+    let _quillesEnabled = null;            // true/false once loaded
+    let _quilles9qDefaultDistance = 400;
+    let _quillesMatrices = [];             // cached matrix list
+
+    async function _loadQuillesContext() {
+      if (_quillesEnabled !== null) return; // already loaded
+      try {
+        const resp = await fetch(`${API_URL}/settings/org-settings-batch?keys=enable_quilles_module,quilles_9q_default_distance`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          _quillesEnabled = (data.enable_quilles_module === 'true');
+          _quilles9qDefaultDistance = parseInt(data.quilles_9q_default_distance, 10) || 400;
+        } else {
+          _quillesEnabled = false;
+        }
+      } catch (e) {
+        console.warn('[Quilles] could not load settings:', e);
+        _quillesEnabled = false;
+      }
+
+      // Load matrices if Quilles enabled
+      if (_quillesEnabled) {
+        try {
+          const r = await fetch(`${API_URL}/settings/distance-matrices?game_mode=5Q`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (r.ok) _quillesMatrices = await r.json();
+        } catch (e) {
+          console.warn('[Quilles] could not load matrices:', e);
+        }
+      }
+
+      // Filter mode dropdowns: hide 5Q/9Q if Quilles disabled
+      if (!_quillesEnabled) {
+        ['create_mode', 'edit_mode', 'modeFilter'].forEach(selId => {
+          const sel = document.getElementById(selId);
+          if (sel) {
+            Array.from(sel.options).forEach(opt => {
+              const v = (opt.value || '').toUpperCase();
+              if (v === '5Q' || v === '9Q' || v === '5 QUILLES' || v === '9 QUILLES') {
+                opt.remove();
+              }
+            });
+          }
+        });
+      }
+    }
+
+    // Toggle Quilles-specific fields based on selected mode
+    function _refreshQuillesFields(modeSelectId, sectionId) {
+      const sel = document.getElementById(modeSelectId);
+      const section = document.getElementById(sectionId);
+      if (!sel || !section) return;
+
+      const val = (sel.value || '').toUpperCase();
+      const is5Q = val === '5Q' || val === '5 QUILLES';
+      const is9Q = val === '9Q' || val === '9 QUILLES';
+      const isQuilles = is5Q || is9Q;
+
+      section.style.display = isQuilles ? '' : 'none';
+
+      // Toggle 9Q vs 5Q sub-blocks (create form)
+      const fdWrapper = document.getElementById('create_fixed_distance_wrapper');
+      const mxWrapper = document.getElementById('create_matrix_wrapper');
+      const ntWrapper = document.getElementById('create_nb_tables_wrapper');
+      const tailleWrapper = document.getElementById('create_taille_wrapper');
+      const tailleCadreWrapper = document.getElementById('create_taille_cadre_wrapper');
+
+      if (fdWrapper) fdWrapper.style.display = is9Q ? '' : 'none';
+      if (mxWrapper) mxWrapper.style.display = is5Q ? '' : 'none';
+      if (ntWrapper) ntWrapper.style.display = is5Q ? '' : 'none';
+      // Hide carambole-specific fields for Quilles
+      if (tailleWrapper) tailleWrapper.style.display = isQuilles ? 'none' : '';
+      if (tailleCadreWrapper) tailleCadreWrapper.style.display = isQuilles ? 'none' : '';
+
+      // Pre-fill 9Q default distance
+      if (is9Q) {
+        const fdInput = document.getElementById('create_fixed_distance');
+        if (fdInput && !fdInput.value) fdInput.value = _quilles9qDefaultDistance;
+      }
+
+      // Populate matrix selector for 5Q (active matrices on tournament date)
+      if (is5Q) {
+        const matrixSel = document.getElementById('create_distance_matrix_id');
+        const debutVal = document.getElementById('create_debut').value;
+        const today = debutVal || new Date().toISOString().slice(0, 10);
+        const active = _quillesMatrices.filter(m => {
+          if (m.active_from && m.active_from.slice(0,10) > today) return false;
+          if (m.active_to && m.active_to.slice(0,10) < today) return false;
+          return true;
+        });
+        if (active.length === 0) {
+          matrixSel.innerHTML = '<option value="">-- Aucune matrice active : créer une matrice dans Paramètres --</option>';
+        } else {
+          matrixSel.innerHTML = active.map(m => {
+            const period = (m.active_from ? m.active_from.slice(0,10) : '?') + ' → ' + (m.active_to ? m.active_to.slice(0,10) : 'en cours');
+            const label = `${m.name}${m.version ? ' (' + m.version + ')' : ''} — ${period}`;
+            return `<option value="${m.id}">${label.replace(/"/g, '&quot;')}</option>`;
+          }).join('');
+        }
+      }
+    }
+
     // Open create modal
-    function openCreateModal() {
+    async function openCreateModal() {
+      await _loadQuillesContext();
       // Reset form
       document.getElementById('createTournoiForm').reset();
+      // Make sure Quilles section starts hidden until a Quilles mode is selected
+      _refreshQuillesFields('create_mode', 'create_quilles_section');
       document.getElementById('createTournoiModal').style.display = 'flex';
     }
 
@@ -1618,6 +1782,11 @@
     document.getElementById('createTournoiForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      const modeVal = (document.getElementById('create_mode').value || '').toUpperCase();
+      const is5Q = modeVal === '5Q' || modeVal === '5 QUILLES';
+      const is9Q = modeVal === '9Q' || modeVal === '9 QUILLES';
+      const isQuilles = is5Q || is9Q;
+
       const data = {
         nom: document.getElementById('create_nom').value,
         mode: document.getElementById('create_mode').value,
@@ -1626,9 +1795,27 @@
         debut: document.getElementById('create_debut').value || null,
         lieu: document.getElementById('create_lieu').value || null,
         lieu_2: document.getElementById('create_lieu_2').value || null,
-        taille: parseInt(document.getElementById('create_taille').value) || null,
-        taille_cadre: document.getElementById('create_taille_cadre').value || null
+        // Carambole-only fields — null for Quilles tournaments
+        taille: isQuilles ? null : (parseInt(document.getElementById('create_taille').value) || null),
+        taille_cadre: isQuilles ? null : (document.getElementById('create_taille_cadre').value || null),
+        // V 2.0.779 — Quilles fields. Backend ignores them when mode is carambole.
+        tournament_format: isQuilles ? 'single_day_bracket' : null,
+        tournament_type: isQuilles ? (document.getElementById('create_tournament_type').value || null) : null,
+        distance_matrix_id: is5Q ? (parseInt(document.getElementById('create_distance_matrix_id').value) || null) : null,
+        fixed_distance: is9Q ? (parseInt(document.getElementById('create_fixed_distance').value) || null) : null,
+        nb_tables: is5Q ? (parseInt(document.getElementById('create_nb_tables').value) || null) : null,
+        tour_number: isQuilles ? (parseInt(document.getElementById('create_tour_number').value) || null) : null
       };
+
+      // Front-end validation for Quilles requirements
+      if (is9Q && !data.fixed_distance) {
+        alert('La distance fixe est obligatoire pour un tournoi 9 Quilles.');
+        return;
+      }
+      if (is5Q && !data.distance_matrix_id) {
+        alert('Veuillez sélectionner une matrice de distance pour le tournoi 5 Quilles.\nSi aucune n\'est listée, créez-en une dans Paramètres → Matrices Quilles.');
+        return;
+      }
 
       const result = await createTournoi(data);
       if (result && result.success) {
@@ -1655,6 +1842,15 @@
     });
     document.getElementById('create_mode').addEventListener('change', () => {
       updateCategorieDropdown('create_mode', 'create_categorie');
+      // V 2.0.779 — Toggle Quilles fields when mode changes
+      _refreshQuillesFields('create_mode', 'create_quilles_section');
+    });
+    // Re-evaluate matrix filtering when tournament date changes (5Q only)
+    document.getElementById('create_debut').addEventListener('change', () => {
+      const modeVal = (document.getElementById('create_mode').value || '').toUpperCase();
+      if (modeVal === '5Q' || modeVal === '5 QUILLES') {
+        _refreshQuillesFields('create_mode', 'create_quilles_section');
+      }
     });
 
     // Auto-fill date fin when date debut is set (if fin is empty or was auto-filled)
