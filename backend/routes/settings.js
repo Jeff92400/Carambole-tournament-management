@@ -2602,6 +2602,181 @@ router.delete('/org-document/:docType', authenticateToken, requireAdmin, async (
   }
 });
 
+// ============================================================================
+// V 2.0.770 — DISTANCE MATRICES (Quilles module)
+// ============================================================================
+//
+// CRUD endpoints for the distance_matrices table — editable matrices that map
+// (nb_tables, nb_poules) → distance for 5 Quilles tournaments. 9 Quilles uses
+// tournoi_ext.fixed_distance (always 400) so doesn't need a matrix.
+//
+// Matrices are versioned (active_from/active_to) so a règlement update mid-
+// season doesn't break historical tournaments. Org-scoped so each org can have
+// its own matrix variants if needed (cdbidf vs a CDB organizing local Quilles).
+//
+// matrix_data shape (JSON):
+//   {
+//     "5": { "4": 80, "5": 80, ..., "15": 120 },   // 5 tables
+//     "6": { "4": 80, ... },                        // 6 tables
+//     ...
+//     "8": { "4": 80, ... }                         // 8 tables
+//   }
+// Keys are string-typed for JSON storage; consumers parseInt as needed.
+
+// GET /api/settings/distance-matrices
+// Returns all matrices for the caller's org. Optional ?game_mode=5Q filter.
+router.get('/distance-matrices', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const gameMode = (req.query.game_mode || '').toUpperCase();
+
+  try {
+    let sql = `
+      SELECT dm.id, dm.name, dm.game_mode_id, gm.code AS game_mode_code,
+             gm.display_name AS game_mode_display, dm.organization_id,
+             dm.version, dm.matrix_data, dm.active_from, dm.active_to,
+             dm.created_at, dm.updated_at
+      FROM distance_matrices dm
+      LEFT JOIN game_modes gm ON dm.game_mode_id = gm.id
+      WHERE ($1::int IS NULL OR dm.organization_id = $1 OR dm.organization_id IS NULL)
+    `;
+    const params = [orgId];
+    if (gameMode) {
+      sql += ` AND UPPER(gm.code) = $${params.length + 1}`;
+      params.push(gameMode);
+    }
+    sql += ` ORDER BY dm.game_mode_id, dm.active_from DESC NULLS LAST, dm.id DESC`;
+
+    const rows = await new Promise((resolve, reject) => {
+      db.all(sql, params, (err, rs) => err ? reject(err) : resolve(rs || []));
+    });
+    res.json(rows);
+  } catch (err) {
+    console.error('[distance-matrices GET] error:', err);
+    res.status(500).json({ error: 'Erreur lors du chargement des matrices' });
+  }
+});
+
+// POST /api/settings/distance-matrices
+// Body: { name, game_mode_id, version, matrix_data, active_from, active_to }
+router.post('/distance-matrices', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const { name, game_mode_id, version, matrix_data, active_from, active_to } = req.body || {};
+
+  if (!name || !game_mode_id || !matrix_data) {
+    return res.status(400).json({ error: 'name, game_mode_id et matrix_data sont obligatoires' });
+  }
+  if (typeof matrix_data !== 'object') {
+    return res.status(400).json({ error: 'matrix_data doit être un objet JSON' });
+  }
+
+  try {
+    const row = await new Promise((resolve, reject) => {
+      db.get(
+        `INSERT INTO distance_matrices
+          (name, game_mode_id, organization_id, version, matrix_data, active_from, active_to)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id`,
+        [name, game_mode_id, orgId, version || null, JSON.stringify(matrix_data),
+         active_from || null, active_to || null],
+        (err, r) => err ? reject(err) : resolve(r)
+      );
+    });
+    res.status(201).json({ id: row.id, success: true });
+  } catch (err) {
+    console.error('[distance-matrices POST] error:', err);
+    res.status(500).json({ error: 'Erreur lors de la création de la matrice' });
+  }
+});
+
+// PUT /api/settings/distance-matrices/:id
+router.put('/distance-matrices/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const id = parseInt(req.params.id, 10);
+  const { name, game_mode_id, version, matrix_data, active_from, active_to } = req.body || {};
+
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID invalide' });
+  if (matrix_data !== undefined && typeof matrix_data !== 'object') {
+    return res.status(400).json({ error: 'matrix_data doit être un objet JSON' });
+  }
+
+  try {
+    // Verify ownership (org-scoped or global)
+    const existing = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id, organization_id FROM distance_matrices WHERE id = $1`,
+        [id],
+        (err, r) => err ? reject(err) : resolve(r)
+      );
+    });
+    if (!existing) return res.status(404).json({ error: 'Matrice introuvable' });
+    if (existing.organization_id && existing.organization_id !== orgId) {
+      return res.status(403).json({ error: 'Cette matrice appartient à une autre organisation' });
+    }
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE distance_matrices
+         SET name = COALESCE($1, name),
+             game_mode_id = COALESCE($2, game_mode_id),
+             version = COALESCE($3, version),
+             matrix_data = COALESCE($4, matrix_data),
+             active_from = $5,
+             active_to = $6,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $7`,
+        [name || null, game_mode_id || null, version || null,
+         matrix_data ? JSON.stringify(matrix_data) : null,
+         active_from || null, active_to || null, id],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[distance-matrices PUT] error:', err);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+  }
+});
+
+// DELETE /api/settings/distance-matrices/:id
+router.delete('/distance-matrices/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID invalide' });
+
+  try {
+    // Check if any tournament still references this matrix
+    const refCount = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(*)::int AS n FROM tournoi_ext WHERE distance_matrix_id = $1`,
+        [id],
+        (err, r) => err ? reject(err) : resolve(r?.n || 0)
+      );
+    });
+    if (refCount > 0) {
+      return res.status(409).json({
+        error: `Cette matrice est utilisée par ${refCount} tournoi(s). Modifiez-les avant de supprimer.`
+      });
+    }
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `DELETE FROM distance_matrices WHERE id = $1
+         AND ($2::int IS NULL OR organization_id = $2 OR organization_id IS NULL)`,
+        [id, orgId],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[distance-matrices DELETE] error:', err);
+    res.status(500).json({ error: 'Erreur lors de la suppression' });
+  }
+});
+
 module.exports = router;
 module.exports.getRankingTournamentNumbers = getRankingTournamentNumbers;
 module.exports.getFinaleTournamentNumber = getFinaleTournamentNumber;
