@@ -3888,6 +3888,12 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       if (key) placeByLicence.set(key, p.place);
     });
 
+    // V 2.0.798 — Sprint 2 D.5: detect Quilles tournament once, then propagate
+    // through the aggregation. Quilles matches accumulate points_subis
+    // (the opponent's score / loser's plafond) and have no reprises.
+    const { isQuillesMode: _isQ } = require('../utils/quilles-helpers');
+    const tournamentIsQuilles = _isQ(pouleCtx.tournament && pouleCtx.tournament.mode);
+
     const statsByLic = new Map();
     const ensure = (licNorm, name) => {
       if (!statsByLic.has(licNorm)) {
@@ -3895,6 +3901,8 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
           licence: licNorm,
           player_name: name || '',
           points: 0, reprises: 0, match_points: 0, best_serie: 0, matches_played: 0,
+          // V 2.0.798 — Quilles: cumulative opponent scores (sum of "points subis")
+          points_subis: 0,
           // MPART: best per-match average across all matches played by the player.
           // Different from MGP = total_points / total_reprises (the overall avg).
           best_match_moyenne: 0,
@@ -3919,6 +3927,11 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       const s2 = ensure(k2, name2);
       s1.points += m.p1_points || 0;
       s2.points += m.p2_points || 0;
+      // V 2.0.798 — Quilles: accumulate points_subis. Carambole matches don't
+      // populate the column, so we fall back to the opponent's points (same
+      // semantically as the symmetric derivation in D.3/D.4).
+      s1.points_subis += (m.p1_points_subis != null ? m.p1_points_subis : (m.p2_points || 0));
+      s2.points_subis += (m.p2_points_subis != null ? m.p2_points_subis : (m.p1_points || 0));
       s1.reprises += m.p1_reprises || 0;
       s2.reprises += m.p2_reprises || 0;
       s1.best_serie = Math.max(s1.best_serie, m.p1_serie || 0);
@@ -4064,17 +4077,27 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
 
     let inserted = 0;
     for (const stats of statsByLic.values()) {
-      const moyenne = stats.reprises > 0 ? (stats.points / stats.reprises) : 0;
+      // V 2.0.798 — Sprint 2 D.5: for Quilles, store points_subis (cumulative
+      // opponent score) and null out reprises/serie/moyenne which don't apply.
+      // Carambole still computes moyenne = points / reprises as before.
+      const moyenne = tournamentIsQuilles
+        ? null
+        : (stats.reprises > 0 ? (stats.points / stats.reprises) : 0);
+      const reprisesValue = tournamentIsQuilles ? null : stats.reprises;
+      const serieValue = tournamentIsQuilles ? null : stats.best_serie;
+      const meilleurePartie = tournamentIsQuilles ? null : (stats.best_match_moyenne || null);
       const position = placeByLicence.get(stats.licence) || 0;
       await new Promise((resolve, reject) => {
         db.run(
           `INSERT INTO tournament_results
              (tournament_id, licence, player_name, position, match_points,
-              moyenne, serie, points, reprises, poule_rank, meilleure_partie)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+              moyenne, serie, points, reprises, poule_rank, meilleure_partie,
+              points_subis)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [tournamentId, stats.licence, stats.player_name, position,
-            stats.match_points, moyenne, stats.best_serie, stats.points,
-            stats.reprises, stats.poule_rank, stats.best_match_moyenne || null],
+            stats.match_points, moyenne, serieValue, stats.points,
+            reprisesValue, stats.poule_rank, meilleurePartie,
+            tournamentIsQuilles ? stats.points_subis : null],
           (err) => err ? reject(err) : resolve()
         );
       });
