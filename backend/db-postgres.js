@@ -2533,59 +2533,88 @@ async function initializeDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_quilles_bracket_configs_players ON quilles_bracket_configs(nb_players)`);
 
-    // V 2.0.813 — Seed quilles_bracket_configs with the LBIF règlement
-    // (Code Sportif "Jeux avec Quilles" 2025-2026, page 5 matrix).
-    // Always poules of 3 players + "qualifiés d'office" for the surplus.
-    // Top 2 of each poule qualify; barrage exists except for 12/23/24 players.
-    // Bracket starts at 1/4 (8 players) until 24, then 1/8 (16 players) from 25+.
-    // Idempotent via ON CONFLICT DO NOTHING — admins can edit/override later
-    // via the UI without being overwritten on next startup.
+    // V 2.0.814 — Extend the schema with the more detailed columns from JC's
+    // matrix v2 (nb_barragistes, nb_exempts_barrage, integrer_exempts_qualif).
+    // These are crucial for the DdJ workflow:
+    //  - nb_barragistes = how many top-of-poules players go to the barrage
+    //  - nb_exempts_barrage = how many top-of-poules players SKIP barrage
+    //    and go directly to the bracket (because barrage size is capped)
+    //  - integrer_exempts_qualif = whether the exempted players are
+    //    reranked together with the barrage winners (LBIF default: NO,
+    //    they go straight to the bracket as a separate group)
+    await client.query(`ALTER TABLE quilles_bracket_configs ADD COLUMN IF NOT EXISTS nb_barragistes INTEGER DEFAULT 0`);
+    await client.query(`ALTER TABLE quilles_bracket_configs ADD COLUMN IF NOT EXISTS nb_exempts_barrage INTEGER DEFAULT 0`);
+    await client.query(`ALTER TABLE quilles_bracket_configs ADD COLUMN IF NOT EXISTS integrer_exempts_qualif BOOLEAN DEFAULT FALSE`);
+
+    // V 2.0.814 — Seed/refresh quilles_bracket_configs with the LBIF règlement
+    // (Code Sportif "Jeux avec Quilles" 2025-2026, page 5, both matrices:
+    // "12 à 22 joueurs (poules, barrages, 1/4)" and "23 à 46 joueurs
+    // (poules, barrages, 1/8)"). Always poules of 3 + qualifiés d'office;
+    // top 2/poule; barrage exists except 12/23/24; bracket=8 from 12 to 22,
+    // bracket=16 from 23 onwards.
+    //
+    // Two-pass strategy:
+    //  1. INSERT … ON CONFLICT DO NOTHING for new rows (preserves admin edits).
+    //  2. UPDATE the new columns when they're still null (legacy rows from
+    //     V 2.0.813 had only the basic 7 fields).
     const lbifBracketSeed = [
-      // [nb_players, nb_poules, nb_direct_qualif, has_barrage, bracket_start, bracket_size, notes]
-      [12, 4, 0, false, 'quarter',  8, "Exception : pas de barrage"],
-      [13, 4, 1, true,  'quarter',  8, null],
-      [14, 4, 2, true,  'quarter',  8, null],
-      [15, 5, 0, true,  'quarter',  8, null],
-      [16, 5, 1, true,  'quarter',  8, null],
-      [17, 5, 2, true,  'quarter',  8, null],
-      [18, 6, 0, true,  'quarter',  8, null],
-      [19, 6, 1, true,  'quarter',  8, null],
-      [20, 6, 2, true,  'quarter',  8, null],
-      [21, 7, 0, true,  'quarter',  8, null],
-      [22, 7, 1, true,  'quarter',  8, null],
-      [23, 7, 2, false, 'quarter',  8, "Exception : pas de barrage"],
-      [24, 8, 0, false, 'quarter',  8, "Exception : pas de barrage"],
-      [25, 8, 1, true,  'eighth',  16, null],
-      [26, 8, 2, true,  'eighth',  16, null],
-      [27, 9, 0, true,  'eighth',  16, null],
-      [28, 9, 1, true,  'eighth',  16, null],
-      [29, 9, 2, true,  'eighth',  16, null],
-      [30, 10, 0, true, 'eighth',  16, null],
-      [31, 10, 1, true, 'eighth',  16, null],
-      [32, 10, 2, true, 'eighth',  16, null],
-      [33, 11, 0, true, 'eighth',  16, null],
-      [34, 11, 1, true, 'eighth',  16, null],
-      [35, 11, 2, true, 'eighth',  16, null],
-      [36, 12, 0, true, 'eighth',  16, null],
-      [37, 12, 1, true, 'eighth',  16, null],
-      [38, 12, 2, true, 'eighth',  16, null],
-      [39, 13, 0, true, 'eighth',  16, null],
-      [40, 13, 1, true, 'eighth',  16, null],
-      [41, 13, 2, true, 'eighth',  16, null],
-      [42, 14, 0, true, 'eighth',  16, null],
-      [43, 14, 1, true, 'eighth',  16, null],
-      [44, 14, 2, true, 'eighth',  16, null],
-      [45, 15, 0, true, 'eighth',  16, null],
-      [46, 15, 1, true, 'eighth',  16, null]
+      // [nb_players, nb_poules, nb_direct_qualif, nb_barragistes, nb_exempts_barrage, has_barrage, bracket_start, bracket_size, notes]
+      [12, 4, 0,  0,  8, false, 'quarter',  8, "Exception : pas de barrage"],
+      [13, 4, 1,  2,  6, true,  'quarter',  8, null],
+      [14, 4, 2,  4,  4, true,  'quarter',  8, null],
+      [15, 5, 0,  4,  6, true,  'quarter',  8, null],
+      [16, 5, 1,  6,  4, true,  'quarter',  8, null],
+      [17, 5, 2,  8,  2, true,  'quarter',  8, null],
+      [18, 6, 0,  8,  4, true,  'quarter',  8, null],
+      [19, 6, 1, 10,  2, true,  'quarter',  8, null],
+      [20, 6, 2, 12,  0, true,  'quarter',  8, null],
+      [21, 7, 0, 12,  2, true,  'quarter',  8, null],
+      [22, 7, 1, 14,  0, true,  'quarter',  8, null],
+      [23, 7, 2,  0, 14, false, 'quarter',  8, "Exception : pas de barrage"],
+      [24, 8, 0,  0, 16, false, 'quarter',  8, "Exception : pas de barrage"],
+      [25, 8, 1,  2, 14, true,  'eighth',  16, null],
+      [26, 8, 2,  4, 12, true,  'eighth',  16, null],
+      [27, 9, 0,  4, 14, true,  'eighth',  16, null],
+      [28, 9, 1,  6, 12, true,  'eighth',  16, null],
+      [29, 9, 2,  8, 10, true,  'eighth',  16, null],
+      [30, 10, 0,  8, 12, true, 'eighth',  16, null],
+      [31, 10, 1, 10, 10, true, 'eighth',  16, null],
+      [32, 10, 2, 12,  8, true, 'eighth',  16, null],
+      [33, 11, 0, 12, 10, true, 'eighth',  16, null],
+      [34, 11, 1, 14,  8, true, 'eighth',  16, null],
+      [35, 11, 2, 16,  6, true, 'eighth',  16, null],
+      [36, 12, 0, 16,  8, true, 'eighth',  16, null],
+      [37, 12, 1, 18,  6, true, 'eighth',  16, null],
+      [38, 12, 2, 20,  4, true, 'eighth',  16, null],
+      [39, 13, 0, 20,  6, true, 'eighth',  16, null],
+      [40, 13, 1, 22,  4, true, 'eighth',  16, null],
+      [41, 13, 2, 24,  2, true, 'eighth',  16, null],
+      [42, 14, 0, 24,  4, true, 'eighth',  16, null],
+      [43, 14, 1, 26,  2, true, 'eighth',  16, null],
+      [44, 14, 2, 28,  0, true, 'eighth',  16, null],
+      [45, 15, 0, 28,  2, true, 'eighth',  16, null],
+      [46, 15, 1, 30,  0, true, 'eighth',  16, null]
     ];
-    for (const [nb_p, nb_po, dq, hb, bs, bsz, nt] of lbifBracketSeed) {
+    for (const [nb_p, nb_po, dq, nbg, neb, hb, bs, bsz, nt] of lbifBracketSeed) {
+      // 1. Insert if missing (new row)
       await client.query(
         `INSERT INTO quilles_bracket_configs
            (nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
+            nb_barragistes, nb_exempts_barrage, integrer_exempts_qualif,
             has_barrage, bracket_start, bracket_size, notes)
-         VALUES ($1, $2, $3, 2, $4, $5, $6, $7)
+         VALUES ($1, $2, $3, 2, $4, $5, FALSE, $6, $7, $8, $9)
          ON CONFLICT (nb_players) DO NOTHING`,
-        [nb_p, nb_po, dq, hb, bs, bsz, nt]
+        [nb_p, nb_po, dq, nbg, neb, hb, bs, bsz, nt]
+      );
+      // 2. Backfill new columns on legacy V 2.0.813 rows that have them NULL
+      await client.query(
+        `UPDATE quilles_bracket_configs
+            SET nb_barragistes = COALESCE(nb_barragistes, $2),
+                nb_exempts_barrage = COALESCE(nb_exempts_barrage, $3),
+                integrer_exempts_qualif = COALESCE(integrer_exempts_qualif, FALSE)
+          WHERE nb_players = $1
+            AND (nb_barragistes IS NULL OR nb_exempts_barrage IS NULL)`,
+        [nb_p, nbg, neb]
       );
     }
 

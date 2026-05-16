@@ -680,11 +680,14 @@ router.get('/quilles-tournament-types', authenticateToken, (req, res) => {
 // poule generation completes.
 
 // GET — list all configs ordered by nb_players (admin UI shows full table)
+// V 2.0.814 — Returns the extended columns (nb_barragistes, nb_exempts_barrage,
+// integrer_exempts_qualif) from JC's detailed LBIF matrix.
 router.get('/quilles-bracket-configs', authenticateToken, (req, res) => {
   const db = require('../db-loader');
   db.all(
     `SELECT id, nb_players, nb_poules, nb_direct_qualif,
             qualified_per_poule, has_barrage, bracket_start, bracket_size,
+            nb_barragistes, nb_exempts_barrage, integrer_exempts_qualif,
             notes, created_at, updated_at
        FROM quilles_bracket_configs
       ORDER BY nb_players`,
@@ -709,6 +712,10 @@ router.post('/quilles-bracket-configs', authenticateToken, requireAdmin, (req, r
   const has_barrage = b.has_barrage === false ? false : true;
   const bracket_start = String(b.bracket_start || 'quarter').toLowerCase();
   const bracket_size = parseInt(b.bracket_size, 10);
+  // V 2.0.814 — Extended columns from JC's detailed matrix
+  const nb_barragistes = parseInt(b.nb_barragistes, 10) || 0;
+  const nb_exempts_barrage = parseInt(b.nb_exempts_barrage, 10) || 0;
+  const integrer_exempts_qualif = b.integrer_exempts_qualif === true;
   const notes = b.notes || null;
 
   if (!Number.isFinite(nb_players) || nb_players < 1) {
@@ -727,8 +734,10 @@ router.post('/quilles-bracket-configs', authenticateToken, requireAdmin, (req, r
   db.run(
     `INSERT INTO quilles_bracket_configs
        (nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
-        has_barrage, bracket_start, bracket_size, notes, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+        has_barrage, bracket_start, bracket_size,
+        nb_barragistes, nb_exempts_barrage, integrer_exempts_qualif,
+        notes, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP)
      ON CONFLICT (nb_players) DO UPDATE SET
        nb_poules = EXCLUDED.nb_poules,
        nb_direct_qualif = EXCLUDED.nb_direct_qualif,
@@ -736,10 +745,14 @@ router.post('/quilles-bracket-configs', authenticateToken, requireAdmin, (req, r
        has_barrage = EXCLUDED.has_barrage,
        bracket_start = EXCLUDED.bracket_start,
        bracket_size = EXCLUDED.bracket_size,
+       nb_barragistes = EXCLUDED.nb_barragistes,
+       nb_exempts_barrage = EXCLUDED.nb_exempts_barrage,
+       integrer_exempts_qualif = EXCLUDED.integrer_exempts_qualif,
        notes = EXCLUDED.notes,
        updated_at = CURRENT_TIMESTAMP`,
     [nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
-     has_barrage, bracket_start, bracket_size, notes],
+     has_barrage, bracket_start, bracket_size,
+     nb_barragistes, nb_exempts_barrage, integrer_exempts_qualif, notes],
     (err) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true });
@@ -748,6 +761,7 @@ router.post('/quilles-bracket-configs', authenticateToken, requireAdmin, (req, r
 });
 
 // PUT /:id — update an existing row by ID (used by the inline edit UI)
+// V 2.0.814 — Extended with the 3 new columns from JC's matrix.
 router.put('/quilles-bracket-configs/:id', authenticateToken, requireAdmin, (req, res) => {
   const db = require('../db-loader');
   const id = parseInt(req.params.id, 10);
@@ -761,9 +775,12 @@ router.put('/quilles-bracket-configs/:id', authenticateToken, requireAdmin, (req
        has_barrage = COALESCE($4, has_barrage),
        bracket_start = COALESCE($5, bracket_start),
        bracket_size = COALESCE($6, bracket_size),
-       notes = COALESCE($7, notes),
+       nb_barragistes = COALESCE($7, nb_barragistes),
+       nb_exempts_barrage = COALESCE($8, nb_exempts_barrage),
+       integrer_exempts_qualif = COALESCE($9, integrer_exempts_qualif),
+       notes = COALESCE($10, notes),
        updated_at = CURRENT_TIMESTAMP
-     WHERE id = $8`,
+     WHERE id = $11`,
     [
       b.nb_poules || null,
       b.nb_direct_qualif === undefined ? null : b.nb_direct_qualif,
@@ -771,6 +788,9 @@ router.put('/quilles-bracket-configs/:id', authenticateToken, requireAdmin, (req
       b.has_barrage === undefined ? null : b.has_barrage,
       b.bracket_start || null,
       b.bracket_size || null,
+      b.nb_barragistes === undefined ? null : b.nb_barragistes,
+      b.nb_exempts_barrage === undefined ? null : b.nb_exempts_barrage,
+      b.integrer_exempts_qualif === undefined ? null : b.integrer_exempts_qualif,
       b.notes === undefined ? null : b.notes,
       id
     ],

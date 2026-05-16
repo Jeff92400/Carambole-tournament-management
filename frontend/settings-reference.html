@@ -548,6 +548,14 @@
               </select>
             </div>
             <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Nb barragistes</label>
+              <input type="number" id="qbcNbBarragistes" min="0" max="40" value="0" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;" title="Joueurs sortis des poules envoyés au barrage">
+            </div>
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Nb exemptés barrage</label>
+              <input type="number" id="qbcNbExempts" min="0" max="40" value="0" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;" title="Joueurs sortis des poules allant directement au bracket (sans passer par le barrage)">
+            </div>
+            <div>
               <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Bracket commence à</label>
               <select id="qbcBracketStart" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
                 <option value="eighth">1/8 finale</option>
@@ -560,7 +568,14 @@
               <input type="number" id="qbcBracketSize" min="2" max="32" value="8" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
             <div>
-              <button type="button" class="btn" onclick="qbcSave()" style="background: #c8102e; color: white; padding: 8px 16px; width: 100%;">+ Enregistrer</button>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Intégrer exempts/qualif</label>
+              <select id="qbcIntegrerExempts" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;" title="Si Oui, les exemptés sont rerankés avec les vainqueurs de barrage. Sinon ils vont au bracket comme groupe séparé.">
+                <option value="false" selected>Non</option>
+                <option value="true">Oui</option>
+              </select>
+            </div>
+            <div style="grid-column: span 2;">
+              <button type="button" class="btn" onclick="qbcSave()" style="background: #c8102e; color: white; padding: 8px 16px; width: 100%;">+ Enregistrer / Mettre à jour</button>
             </div>
           </div>
           <div style="margin-top: 12px;">
@@ -572,19 +587,22 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th style="width: 80px;">Nb joueurs</th>
-              <th style="width: 80px;">Poules</th>
-              <th style="width: 110px;">Qualif. d'office</th>
-              <th style="width: 100px;">Top X / poule</th>
+              <th style="width: 70px;">Nb joueurs</th>
+              <th style="width: 70px;">Poules</th>
+              <th style="width: 90px;">Top X / poule</th>
+              <th style="width: 90px;">Barragistes</th>
+              <th style="width: 100px;">Exemptés barrage</th>
+              <th style="width: 100px;">Qualif. d'office</th>
               <th style="width: 80px;">Barrage</th>
-              <th style="width: 110px;">Bracket à partir</th>
-              <th style="width: 100px;">Taille bracket</th>
+              <th style="width: 100px;">Intégrer exempts</th>
+              <th style="width: 100px;">Bracket à partir</th>
+              <th style="width: 90px;">Taille bracket</th>
               <th>Notes</th>
               <th style="width: 100px;">Actions</th>
             </tr>
           </thead>
           <tbody id="quillesBracketConfigsBody">
-            <tr><td colspan="9" class="empty-state">Chargement...</td></tr>
+            <tr><td colspan="12" class="empty-state">Chargement...</td></tr>
           </tbody>
         </table>
       </div>
@@ -723,7 +741,7 @@
         if (!resp.ok) throw new Error('Erreur ' + resp.status);
         const rows = await resp.json();
         if (!rows.length) {
-          tbody.innerHTML = `<tr><td colspan="9" class="empty-state">
+          tbody.innerHTML = `<tr><td colspan="12" class="empty-state">
             Aucune configuration. Ajoutez les lignes de la matrice LBIF via le formulaire ci-dessus.
           </td></tr>`;
           return;
@@ -733,9 +751,12 @@
           <tr>
             <td><strong>${r.nb_players}</strong></td>
             <td>${r.nb_poules}</td>
-            <td>${r.nb_direct_qualif || 0}</td>
             <td>${r.qualified_per_poule}</td>
+            <td>${r.nb_barragistes != null ? r.nb_barragistes : '—'}</td>
+            <td>${r.nb_exempts_barrage != null ? r.nb_exempts_barrage : '—'}</td>
+            <td>${r.nb_direct_qualif || 0}</td>
             <td>${r.has_barrage ? '✓ Oui' : '— Non'}</td>
+            <td>${r.integrer_exempts_qualif ? '✓ Oui' : '— Non'}</td>
             <td>${startLabels[r.bracket_start] || r.bracket_start}</td>
             <td>${r.bracket_size}</td>
             <td style="color: #666; font-size: 12px;">${r.notes || ''}</td>
@@ -746,7 +767,7 @@
           </tr>
         `).join('');
       } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color: #c0392b;">❌ ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="empty-state" style="color: #c0392b;">❌ ${e.message}</td></tr>`;
       }
     }
 
@@ -756,8 +777,11 @@
       document.getElementById('qbcDirectQualif').value = r.nb_direct_qualif || 0;
       document.getElementById('qbcQualifPerPoule').value = r.qualified_per_poule;
       document.getElementById('qbcHasBarrage').value = String(r.has_barrage);
+      document.getElementById('qbcNbBarragistes').value = r.nb_barragistes != null ? r.nb_barragistes : 0;
+      document.getElementById('qbcNbExempts').value = r.nb_exempts_barrage != null ? r.nb_exempts_barrage : 0;
       document.getElementById('qbcBracketStart').value = r.bracket_start;
       document.getElementById('qbcBracketSize').value = r.bracket_size;
+      document.getElementById('qbcIntegrerExempts').value = String(!!r.integrer_exempts_qualif);
       document.getElementById('qbcNotes').value = r.notes || '';
       document.getElementById('qbcNbPlayers').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -769,13 +793,21 @@
         nb_direct_qualif: parseInt(document.getElementById('qbcDirectQualif').value, 10) || 0,
         qualified_per_poule: parseInt(document.getElementById('qbcQualifPerPoule').value, 10) || 2,
         has_barrage: document.getElementById('qbcHasBarrage').value === 'true',
+        nb_barragistes: parseInt(document.getElementById('qbcNbBarragistes').value, 10) || 0,
+        nb_exempts_barrage: parseInt(document.getElementById('qbcNbExempts').value, 10) || 0,
         bracket_start: document.getElementById('qbcBracketStart').value,
         bracket_size: parseInt(document.getElementById('qbcBracketSize').value, 10),
+        integrer_exempts_qualif: document.getElementById('qbcIntegrerExempts').value === 'true',
         notes: document.getElementById('qbcNotes').value.trim() || null
       };
       if (!payload.nb_players || !payload.nb_poules || !payload.bracket_size) {
         showMessage('error', 'Champs obligatoires : nb joueurs, nb poules, taille bracket.');
         return;
+      }
+      // Sanity check: barragistes + exempts should = top X * nb_poules (informative warning only)
+      const sortedFromPoules = payload.qualified_per_poule * payload.nb_poules;
+      if (payload.nb_barragistes + payload.nb_exempts_barrage !== sortedFromPoules) {
+        if (!confirm(`Attention : barragistes (${payload.nb_barragistes}) + exemptés (${payload.nb_exempts_barrage}) = ${payload.nb_barragistes + payload.nb_exempts_barrage}, mais on attendrait ${sortedFromPoules} (${payload.qualified_per_poule} × ${payload.nb_poules}).\n\nEnregistrer quand même ?`)) return;
       }
       try {
         const resp = await authFetch(`${API_URL}/reference-data/quilles-bracket-configs`, {
@@ -789,6 +821,8 @@
         // Reset form for the next row
         ['qbcNbPlayers', 'qbcNbPoules', 'qbcNotes'].forEach(id => document.getElementById(id).value = '');
         document.getElementById('qbcDirectQualif').value = '0';
+        document.getElementById('qbcNbBarragistes').value = '0';
+        document.getElementById('qbcNbExempts').value = '0';
         await loadQuillesBracketConfigs();
       } catch (e) {
         showMessage('error', '❌ ' + e.message);
