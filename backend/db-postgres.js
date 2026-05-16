@@ -2613,14 +2613,24 @@ async function initializeDatabase() {
          ON CONFLICT (nb_players) DO NOTHING`,
         [nb_p, nb_po, dq, nbg, neb, hb, bs, bsz, nt]
       );
-      // 2. Backfill new columns on legacy V 2.0.813 rows that have them NULL
+      // 2. V 2.0.823 — Force backfill of legacy V 2.0.813 rows.
+      // The original V 2.0.814 backfill used COALESCE which silently failed:
+      // ALTER TABLE ... ADD COLUMN DEFAULT 0 means existing rows received
+      // value 0 (not NULL), so COALESCE(nb_barragistes, $2) returned 0 and
+      // never injected the seed value. Now we force-update rows whose
+      // nb_barragistes is 0 AND a non-zero seed value is expected, OR whose
+      // nb_exempts_barrage is 0 AND a non-zero seed value is expected.
+      // Conservative: only touch rows that look "unmigrated" — never overwrite
+      // an admin's explicit zero (if they ever set one).
       await client.query(
         `UPDATE quilles_bracket_configs
-            SET nb_barragistes = COALESCE(nb_barragistes, $2),
-                nb_exempts_barrage = COALESCE(nb_exempts_barrage, $3),
-                integrer_exempts_qualif = COALESCE(integrer_exempts_qualif, FALSE)
+            SET nb_barragistes = $2,
+                nb_exempts_barrage = $3
           WHERE nb_players = $1
-            AND (nb_barragistes IS NULL OR nb_exempts_barrage IS NULL)`,
+            AND (
+              (nb_barragistes = 0 AND $2 > 0)
+              OR (nb_exempts_barrage = 0 AND $3 > 0)
+            )`,
         [nb_p, nbg, neb]
       );
     }
