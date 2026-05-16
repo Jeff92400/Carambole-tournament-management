@@ -2538,6 +2538,40 @@ async function loadBracket(db, orgId, tournoiId) {
 async function loadBarrage(db, orgId, tournoiId) {
   const { isQuillesMode, getBracketConfig, computeReclassementSerpentin, resolveDistance } = require('../utils/quilles-helpers');
 
+  // V 2.0.822 — Defensive just-in-time table creation. The startup migration
+  // in db-postgres.js V 2.0.820 should have created this table; if for any
+  // reason the migration didn't run (deploy ordering, init error earlier in
+  // the chain, manual rollback), we ensure the table exists before querying.
+  // Idempotent — no-op if the table already exists.
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS ddj_barrage_matches (
+          id SERIAL PRIMARY KEY,
+          tournoi_id INTEGER NOT NULL REFERENCES tournoi_ext(tournoi_id) ON DELETE CASCADE,
+          match_number INTEGER NOT NULL,
+          table_number INTEGER,
+          p1_licence TEXT NOT NULL,
+          p2_licence TEXT NOT NULL,
+          p1_points INTEGER,
+          p1_points_subis INTEGER,
+          p2_points INTEGER,
+          p2_points_subis INTEGER,
+          referee_name TEXT,
+          referee_licence TEXT,
+          entered_at TIMESTAMP,
+          entered_by INTEGER,
+          started_at TIMESTAMP,
+          finished_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(tournoi_id, match_number)
+        )
+      `, [], (err) => err ? reject(err) : resolve());
+    });
+  } catch (e) {
+    console.error('[loadBarrage] defensive CREATE TABLE failed:', e.message);
+  }
+
   // 1. Tournament (with Quilles columns)
   const tournament = await new Promise((resolve, reject) => {
     db.get(
