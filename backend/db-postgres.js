@@ -2533,6 +2533,62 @@ async function initializeDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_quilles_bracket_configs_players ON quilles_bracket_configs(nb_players)`);
 
+    // V 2.0.813 — Seed quilles_bracket_configs with the LBIF règlement
+    // (Code Sportif "Jeux avec Quilles" 2025-2026, page 5 matrix).
+    // Always poules of 3 players + "qualifiés d'office" for the surplus.
+    // Top 2 of each poule qualify; barrage exists except for 12/23/24 players.
+    // Bracket starts at 1/4 (8 players) until 24, then 1/8 (16 players) from 25+.
+    // Idempotent via ON CONFLICT DO NOTHING — admins can edit/override later
+    // via the UI without being overwritten on next startup.
+    const lbifBracketSeed = [
+      // [nb_players, nb_poules, nb_direct_qualif, has_barrage, bracket_start, bracket_size, notes]
+      [12, 4, 0, false, 'quarter',  8, "Exception : pas de barrage"],
+      [13, 4, 1, true,  'quarter',  8, null],
+      [14, 4, 2, true,  'quarter',  8, null],
+      [15, 5, 0, true,  'quarter',  8, null],
+      [16, 5, 1, true,  'quarter',  8, null],
+      [17, 5, 2, true,  'quarter',  8, null],
+      [18, 6, 0, true,  'quarter',  8, null],
+      [19, 6, 1, true,  'quarter',  8, null],
+      [20, 6, 2, true,  'quarter',  8, null],
+      [21, 7, 0, true,  'quarter',  8, null],
+      [22, 7, 1, true,  'quarter',  8, null],
+      [23, 7, 2, false, 'quarter',  8, "Exception : pas de barrage"],
+      [24, 8, 0, false, 'quarter',  8, "Exception : pas de barrage"],
+      [25, 8, 1, true,  'eighth',  16, null],
+      [26, 8, 2, true,  'eighth',  16, null],
+      [27, 9, 0, true,  'eighth',  16, null],
+      [28, 9, 1, true,  'eighth',  16, null],
+      [29, 9, 2, true,  'eighth',  16, null],
+      [30, 10, 0, true, 'eighth',  16, null],
+      [31, 10, 1, true, 'eighth',  16, null],
+      [32, 10, 2, true, 'eighth',  16, null],
+      [33, 11, 0, true, 'eighth',  16, null],
+      [34, 11, 1, true, 'eighth',  16, null],
+      [35, 11, 2, true, 'eighth',  16, null],
+      [36, 12, 0, true, 'eighth',  16, null],
+      [37, 12, 1, true, 'eighth',  16, null],
+      [38, 12, 2, true, 'eighth',  16, null],
+      [39, 13, 0, true, 'eighth',  16, null],
+      [40, 13, 1, true, 'eighth',  16, null],
+      [41, 13, 2, true, 'eighth',  16, null],
+      [42, 14, 0, true, 'eighth',  16, null],
+      [43, 14, 1, true, 'eighth',  16, null],
+      [44, 14, 2, true, 'eighth',  16, null],
+      [45, 15, 0, true, 'eighth',  16, null],
+      [46, 15, 1, true, 'eighth',  16, null]
+    ];
+    for (const [nb_p, nb_po, dq, hb, bs, bsz, nt] of lbifBracketSeed) {
+      await client.query(
+        `INSERT INTO quilles_bracket_configs
+           (nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
+            has_barrage, bracket_start, bracket_size, notes)
+         VALUES ($1, $2, $3, 2, $4, $5, $6, $7)
+         ON CONFLICT (nb_players) DO NOTHING`,
+        [nb_p, nb_po, dq, hb, bs, bsz, nt]
+      );
+    }
+
     // V 2.0.783 — Reference table for Quilles tournament types
     // (régional / qualif_n1 / finale_ligue). Replaces the hardcoded
     // dropdown options in the frontend with a properly seeded reference
