@@ -182,6 +182,26 @@
       padding: 14px 18px; border-radius: 6px; margin-bottom: 14px;
       color: #92400e;
     }
+
+    /* V 2.0.827 — Base dot CSS for the 7-step stepper. The page was missing
+       these rules so the dots were rendering as 0×0 invisible divs. Copied
+       verbatim from directeur-de-jeu-poules.html for consistency. */
+    .ddj-steps {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin: 0 0 18px 0;
+    }
+    .ddj-steps .dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #dee2e6;
+    }
+    .ddj-steps .dot.done { background: #28a745; }
+    .ddj-steps .dot.active {
+      background: var(--color-primary, #1F4788);
+      box-shadow: 0 0 0 4px rgba(31,71,136,0.18);
+    }
   </style>
 </head>
 <body>
