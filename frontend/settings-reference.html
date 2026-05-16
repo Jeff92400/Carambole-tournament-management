@@ -327,6 +327,7 @@
         <button class="tab" data-tab="ffb-rankings">Classements FFB</button>
         <button class="tab" data-tab="categories">Categories</button>
         <button class="tab" data-tab="poule-config">Config. Poules</button>
+        <button class="tab" data-tab="quilles-config">🎯 Quilles LBIF</button>
       </div>
 
       <!-- Tab: Game Modes -->
@@ -501,6 +502,93 @@
         </table>
       </div>
 
+      <!-- V 2.0.812 — Tab: Quilles LBIF bracket configurations -->
+      <div class="tab-content" id="tab-quilles-config">
+        <div style="background: linear-gradient(135deg, #fff5f5 0%, #ffebeb 100%); border-left: 4px solid #c8102e; padding: 14px 18px; border-radius: 6px; margin-bottom: 16px;">
+          <strong style="color: #8b0000;">📜 Référence LBIF — Code Sportif "Jeux avec Quilles" 2025-2026, page 5</strong>
+          <p style="margin: 8px 0 0 0; color: #555; font-size: 14px;">
+            Configuration du tableau final par nombre de joueurs inscrits.
+            Pour chaque effectif (de 12 à 46 joueurs), la table définit :
+            le nombre de poules (toutes de 3 joueurs), les qualifiés d'office, la phase de barrage,
+            et la structure du bracket (1/8, 1/4, 1/2, F+PF).
+          </p>
+          <p style="margin: 8px 0 0 0; color: #777; font-size: 13px; font-style: italic;">
+            Source : matrice fournie par Jean-Christophe PAPIN (responsable commission sportive LBIF).
+            Modifiable si le règlement évolue.
+          </p>
+        </div>
+
+        <div class="add-form">
+          <h3 style="margin-top: 0;">Ajouter / Modifier une configuration</h3>
+          <p style="font-size: 13px; color: #666; margin: 0 0 12px 0;">
+            Si une ligne existe déjà pour ce nb de joueurs, elle sera <strong>remplacée</strong>.
+          </p>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; align-items: end;">
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Nb joueurs *</label>
+              <input type="number" id="qbcNbPlayers" min="1" max="100" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Nb poules *</label>
+              <input type="number" id="qbcNbPoules" min="1" max="20" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Qualifiés d'office</label>
+              <input type="number" id="qbcDirectQualif" min="0" max="10" value="0" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Top X / poule</label>
+              <input type="number" id="qbcQualifPerPoule" min="1" max="4" value="2" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Phase barrage</label>
+              <select id="qbcHasBarrage" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <option value="true">Oui</option>
+                <option value="false">Non</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Bracket commence à</label>
+              <select id="qbcBracketStart" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <option value="eighth">1/8 finale</option>
+                <option value="quarter" selected>1/4 finale</option>
+                <option value="semi">1/2 finale</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Taille bracket *</label>
+              <input type="number" id="qbcBracketSize" min="2" max="32" value="8" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div>
+              <button type="button" class="btn" onclick="qbcSave()" style="background: #c8102e; color: white; padding: 8px 16px; width: 100%;">+ Enregistrer</button>
+            </div>
+          </div>
+          <div style="margin-top: 12px;">
+            <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Notes (optionnel)</label>
+            <input type="text" id="qbcNotes" placeholder="Ex. Exception : pas de barrage" style="width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;">
+          </div>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 80px;">Nb joueurs</th>
+              <th style="width: 80px;">Poules</th>
+              <th style="width: 110px;">Qualif. d'office</th>
+              <th style="width: 100px;">Top X / poule</th>
+              <th style="width: 80px;">Barrage</th>
+              <th style="width: 110px;">Bracket à partir</th>
+              <th style="width: 100px;">Taille bracket</th>
+              <th>Notes</th>
+              <th style="width: 100px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="quillesBracketConfigsBody">
+            <tr><td colspan="9" class="empty-state">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
     </div>
 
     <!-- Back to settings link -->
@@ -622,8 +710,104 @@
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         tab.classList.add('active');
         document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+        // V 2.0.812 — Lazy-load the Quilles bracket configs tab on first show
+        if (tab.dataset.tab === 'quilles-config') loadQuillesBracketConfigs();
       });
     });
+
+    // V 2.0.812 — Quilles bracket configs (LBIF Code Sportif page 5 matrix)
+    async function loadQuillesBracketConfigs() {
+      const tbody = document.getElementById('quillesBracketConfigsBody');
+      try {
+        const resp = await authFetch(`${API_URL}/reference-data/quilles-bracket-configs`);
+        if (!resp.ok) throw new Error('Erreur ' + resp.status);
+        const rows = await resp.json();
+        if (!rows.length) {
+          tbody.innerHTML = `<tr><td colspan="9" class="empty-state">
+            Aucune configuration. Ajoutez les lignes de la matrice LBIF via le formulaire ci-dessus.
+          </td></tr>`;
+          return;
+        }
+        const startLabels = { eighth: '1/8 finale', quarter: '1/4 finale', semi: '1/2 finale' };
+        tbody.innerHTML = rows.map(r => `
+          <tr>
+            <td><strong>${r.nb_players}</strong></td>
+            <td>${r.nb_poules}</td>
+            <td>${r.nb_direct_qualif || 0}</td>
+            <td>${r.qualified_per_poule}</td>
+            <td>${r.has_barrage ? '✓ Oui' : '— Non'}</td>
+            <td>${startLabels[r.bracket_start] || r.bracket_start}</td>
+            <td>${r.bracket_size}</td>
+            <td style="color: #666; font-size: 12px;">${r.notes || ''}</td>
+            <td>
+              <button class="btn btn-small" onclick="qbcPrefill(${JSON.stringify(r).replace(/"/g, '&quot;')})" style="background: #1F4788; color: white; padding: 4px 8px; font-size: 11px;">Éditer</button>
+              <button class="btn btn-small" onclick="qbcDelete(${r.id}, ${r.nb_players})" style="background: #dc3545; color: white; padding: 4px 8px; font-size: 11px;">×</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="9" class="empty-state" style="color: #c0392b;">❌ ${e.message}</td></tr>`;
+      }
+    }
+
+    function qbcPrefill(r) {
+      document.getElementById('qbcNbPlayers').value = r.nb_players;
+      document.getElementById('qbcNbPoules').value = r.nb_poules;
+      document.getElementById('qbcDirectQualif').value = r.nb_direct_qualif || 0;
+      document.getElementById('qbcQualifPerPoule').value = r.qualified_per_poule;
+      document.getElementById('qbcHasBarrage').value = String(r.has_barrage);
+      document.getElementById('qbcBracketStart').value = r.bracket_start;
+      document.getElementById('qbcBracketSize').value = r.bracket_size;
+      document.getElementById('qbcNotes').value = r.notes || '';
+      document.getElementById('qbcNbPlayers').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    async function qbcSave() {
+      const payload = {
+        nb_players: parseInt(document.getElementById('qbcNbPlayers').value, 10),
+        nb_poules: parseInt(document.getElementById('qbcNbPoules').value, 10),
+        nb_direct_qualif: parseInt(document.getElementById('qbcDirectQualif').value, 10) || 0,
+        qualified_per_poule: parseInt(document.getElementById('qbcQualifPerPoule').value, 10) || 2,
+        has_barrage: document.getElementById('qbcHasBarrage').value === 'true',
+        bracket_start: document.getElementById('qbcBracketStart').value,
+        bracket_size: parseInt(document.getElementById('qbcBracketSize').value, 10),
+        notes: document.getElementById('qbcNotes').value.trim() || null
+      };
+      if (!payload.nb_players || !payload.nb_poules || !payload.bracket_size) {
+        showMessage('error', 'Champs obligatoires : nb joueurs, nb poules, taille bracket.');
+        return;
+      }
+      try {
+        const resp = await authFetch(`${API_URL}/reference-data/quilles-bracket-configs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur ' + resp.status);
+        showMessage('success', `Configuration enregistrée pour ${payload.nb_players} joueurs.`);
+        // Reset form for the next row
+        ['qbcNbPlayers', 'qbcNbPoules', 'qbcNotes'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('qbcDirectQualif').value = '0';
+        await loadQuillesBracketConfigs();
+      } catch (e) {
+        showMessage('error', '❌ ' + e.message);
+      }
+    }
+
+    async function qbcDelete(id, nbPlayers) {
+      if (!confirm(`Supprimer la configuration pour ${nbPlayers} joueurs ?`)) return;
+      try {
+        const resp = await authFetch(`${API_URL}/reference-data/quilles-bracket-configs/${id}`, {
+          method: 'DELETE'
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erreur ' + resp.status);
+        await loadQuillesBracketConfigs();
+      } catch (e) {
+        showMessage('error', '❌ ' + e.message);
+      }
+    }
 
     // Show message helper
     function showMessage(type, message) {

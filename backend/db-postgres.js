@@ -2501,6 +2501,38 @@ async function initializeDatabase() {
       ON CONFLICT (code) DO NOTHING
     `);
 
+    // V 2.0.812 — Reference table for Quilles bracket configurations
+    // (per the LBIF Code Sportif "Jeux avec Quilles" 2025-2026, page 5).
+    //
+    // For each nb_players, the LBIF règlement specifies:
+    //   - nb_poules of 3 players (always 3 per LBIF règlement, surplus = "qualifiés d'office")
+    //   - nb_direct_qualif (joueurs auto-qualifiés au tableau final si reste +1 ou +2)
+    //   - qualified_per_poule (toujours 2 par LBIF: top 2 de chaque poule)
+    //   - has_barrage (TRUE sauf 12, 23, 24 joueurs où c'est FALSE par exception)
+    //   - bracket_start ('eighth' = 1/8 ou 'quarter' = 1/4)
+    //   - bracket_size (4, 8, ou 16 joueurs dans le tableau final)
+    //
+    // Reference data NOT org-scoped: the LBIF règlement is the same for all
+    // CDBs participating in LBIF tournaments. Admin can override globally
+    // if a new règlement version arrives.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS quilles_bracket_configs (
+        id SERIAL PRIMARY KEY,
+        nb_players INTEGER NOT NULL UNIQUE,
+        nb_poules INTEGER NOT NULL,
+        nb_direct_qualif INTEGER NOT NULL DEFAULT 0,
+        qualified_per_poule INTEGER NOT NULL DEFAULT 2,
+        has_barrage BOOLEAN NOT NULL DEFAULT TRUE,
+        bracket_start VARCHAR(10) NOT NULL DEFAULT 'quarter',
+        bracket_size INTEGER NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK (bracket_start IN ('eighth', 'quarter', 'semi'))
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_quilles_bracket_configs_players ON quilles_bracket_configs(nb_players)`);
+
     // V 2.0.783 — Reference table for Quilles tournament types
     // (régional / qualif_n1 / finale_ligue). Replaces the hardcoded
     // dropdown options in the frontend with a properly seeded reference

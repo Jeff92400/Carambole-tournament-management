@@ -673,6 +673,129 @@ router.get('/quilles-tournament-types', authenticateToken, (req, res) => {
   );
 });
 
+// ==================== QUILLES BRACKET CONFIGS (V 2.0.812) ====================
+// LBIF reference table: nb_players → bracket configuration. Per the
+// LBIF Code Sportif page 5 matrix (12 to 46 players). Used by the DdJ
+// workflow to determine bracket structure (1/8, 1/4, ½, F+PF) when the
+// poule generation completes.
+
+// GET — list all configs ordered by nb_players (admin UI shows full table)
+router.get('/quilles-bracket-configs', authenticateToken, (req, res) => {
+  const db = require('../db-loader');
+  db.all(
+    `SELECT id, nb_players, nb_poules, nb_direct_qualif,
+            qualified_per_poule, has_barrage, bracket_start, bracket_size,
+            notes, created_at, updated_at
+       FROM quilles_bracket_configs
+      ORDER BY nb_players`,
+    [],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows || []);
+    }
+  );
+});
+
+// POST — create or replace by nb_players (idempotent upsert).
+// Body: { nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
+//         has_barrage, bracket_start, bracket_size, notes }
+router.post('/quilles-bracket-configs', authenticateToken, requireAdmin, (req, res) => {
+  const db = require('../db-loader');
+  const b = req.body || {};
+  const nb_players = parseInt(b.nb_players, 10);
+  const nb_poules = parseInt(b.nb_poules, 10);
+  const nb_direct_qualif = parseInt(b.nb_direct_qualif, 10) || 0;
+  const qualified_per_poule = parseInt(b.qualified_per_poule, 10) || 2;
+  const has_barrage = b.has_barrage === false ? false : true;
+  const bracket_start = String(b.bracket_start || 'quarter').toLowerCase();
+  const bracket_size = parseInt(b.bracket_size, 10);
+  const notes = b.notes || null;
+
+  if (!Number.isFinite(nb_players) || nb_players < 1) {
+    return res.status(400).json({ error: 'nb_players doit être un entier ≥ 1' });
+  }
+  if (!Number.isFinite(nb_poules) || nb_poules < 1) {
+    return res.status(400).json({ error: 'nb_poules doit être un entier ≥ 1' });
+  }
+  if (!Number.isFinite(bracket_size) || bracket_size < 2) {
+    return res.status(400).json({ error: 'bracket_size doit être un entier ≥ 2' });
+  }
+  if (!['eighth', 'quarter', 'semi'].includes(bracket_start)) {
+    return res.status(400).json({ error: 'bracket_start ∈ {eighth, quarter, semi}' });
+  }
+
+  db.run(
+    `INSERT INTO quilles_bracket_configs
+       (nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
+        has_barrage, bracket_start, bracket_size, notes, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+     ON CONFLICT (nb_players) DO UPDATE SET
+       nb_poules = EXCLUDED.nb_poules,
+       nb_direct_qualif = EXCLUDED.nb_direct_qualif,
+       qualified_per_poule = EXCLUDED.qualified_per_poule,
+       has_barrage = EXCLUDED.has_barrage,
+       bracket_start = EXCLUDED.bracket_start,
+       bracket_size = EXCLUDED.bracket_size,
+       notes = EXCLUDED.notes,
+       updated_at = CURRENT_TIMESTAMP`,
+    [nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
+     has_barrage, bracket_start, bracket_size, notes],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
+
+// PUT /:id — update an existing row by ID (used by the inline edit UI)
+router.put('/quilles-bracket-configs/:id', authenticateToken, requireAdmin, (req, res) => {
+  const db = require('../db-loader');
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID invalide' });
+  const b = req.body || {};
+  db.run(
+    `UPDATE quilles_bracket_configs SET
+       nb_poules = COALESCE($1, nb_poules),
+       nb_direct_qualif = COALESCE($2, nb_direct_qualif),
+       qualified_per_poule = COALESCE($3, qualified_per_poule),
+       has_barrage = COALESCE($4, has_barrage),
+       bracket_start = COALESCE($5, bracket_start),
+       bracket_size = COALESCE($6, bracket_size),
+       notes = COALESCE($7, notes),
+       updated_at = CURRENT_TIMESTAMP
+     WHERE id = $8`,
+    [
+      b.nb_poules || null,
+      b.nb_direct_qualif === undefined ? null : b.nb_direct_qualif,
+      b.qualified_per_poule || null,
+      b.has_barrage === undefined ? null : b.has_barrage,
+      b.bracket_start || null,
+      b.bracket_size || null,
+      b.notes === undefined ? null : b.notes,
+      id
+    ],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
+
+// DELETE — remove a config row
+router.delete('/quilles-bracket-configs/:id', authenticateToken, requireAdmin, (req, res) => {
+  const db = require('../db-loader');
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID invalide' });
+  db.run(
+    `DELETE FROM quilles_bracket_configs WHERE id = $1`,
+    [id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
+
 // ==================== USER ROLES ====================
 
 router.get('/user-roles', authenticateToken, (req, res) => {
