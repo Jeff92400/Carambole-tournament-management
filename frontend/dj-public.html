@@ -681,6 +681,9 @@
   // Render
   // ----------------------------------------------------------------
   function render(data) {
+    // V 2.0.831 — stash barrage state for renderBracketQuilles' phase-aware
+    // "En attente…" message (must be set before any render* call below).
+    _latestBarrageState = data.barrage || null;
     computeMedals(data.bracket);
     // Header
     $('t-name').textContent = (data.tournament && data.tournament.name) || 'Tournoi';
@@ -888,15 +891,21 @@
   }
 
   // ---- BRACKET ----
+  // V 2.0.831 — Capture barrage state so the bracket column can show a
+  // phase-aware "En attente…" message (poules → barrage → bracket) instead
+  // of always saying "fin des poules" even after the poules are done.
+  let _latestBarrageState = null;
   function renderBracket(b) {
+    // V 2.0.830/831 — Quilles dispatch FIRST. The carambole early-return
+    // below bailed out before reaching the Quilles renderer when
+    // bracket.available was still false (e.g. barrage in progress), so the
+    // TV showed the wrong "fin des poules" message instead of the correct
+    // "fin du barrage" wait.
+    if (b && b.mode === 'lbif_bracket') return renderBracketQuilles(b);
+
     if (!b || !b.phases || b.phases.length === 0 || !b.available) {
       return `<div class="bracket-empty">En attente de la fin des poules…</div>`;
     }
-    // V 2.0.830 — Sprint 2 LBIF Phase 5: Quilles dynamic bracket (mode
-    // 'lbif_bracket') has EIGHTH1-8 / QF1-4 / SF1-2 / F / PF. The carambole
-    // 3-column visual is too rigid for 4 or 8 first-round matches, so we
-    // render Quilles as a vertical grouped list (one section per round).
-    if (b.mode === 'lbif_bracket') return renderBracketQuilles(b);
     const byPhase = {};
     for (const ph of b.phases) byPhase[ph.phase] = ph;
     const sf1 = byPhase['SF1'];
@@ -935,6 +944,24 @@
   // Each match uses the same renderBmatch() card as the carambole bracket
   // so the TV visual stays consistent.
   function renderBracketQuilles(b) {
+    // V 2.0.831 — Phase-aware wait message. Until the bracket is "available"
+    // (all poules played + all barrage matches done) we show why we're waiting
+    // instead of the generic "fin des poules" which is misleading when poules
+    // are done but the barrage is still in progress.
+    if (!b.available || !b.phases || b.phases.length === 0) {
+      const bg = _latestBarrageState;
+      let msg = 'En attente de la fin des poules…';
+      if (bg && bg.applicable) {
+        if (!bg.can_start) {
+          msg = 'En attente de la fin des poules…';
+        } else if (bg.has_barrage && !bg.all_done) {
+          msg = 'En attente de la fin du barrage…';
+        } else {
+          msg = 'En attente des qualifiés…';
+        }
+      }
+      return `<div class="bracket-empty">${escapeHtml(msg)}</div>`;
+    }
     const byPhase = {};
     for (const ph of b.phases) byPhase[ph.phase] = ph;
     const sections = [];
