@@ -2604,13 +2604,42 @@ async function loadBracketQuilles(db, orgId, tournoiId, pouleCtx) {
   if (lbifCfg.has_barrage) {
     // Standard with-barrage path
     for (const e of barrageCtx.exempts || []) qualifiers.push(mkQ('exempt', e));
+
+    // V 2.0.833 — Resilient winner lookup. The original implementation only
+    // searched barrageCtx.barragistes, which broke when the serpentin rerank
+    // changed (e.g. V 2.0.832 made the tie-break deterministic — players
+    // who used to be "barragiste" became "exempt" or vice versa, so the
+    // licence on a saved barrage match no longer matched anyone in the
+    // current barragistes list and the winner was silently dropped).
+    // Now we fall back through all known sources: barragistes → exempts →
+    // convocation_poules (raw player_name/club for whoever played the
+    // barrage match, regardless of how the rerank classifies them today).
+    const findPlayer = async (normLic) => {
+      const inB = (barrageCtx.barragistes || []).find(b =>
+        String(b.licence || '').replace(/\s+/g, '') === normLic);
+      if (inB) return inB;
+      const inE = (barrageCtx.exempts || []).find(b =>
+        String(b.licence || '').replace(/\s+/g, '') === normLic);
+      if (inE) return inE;
+      // Last resort: pull name/club straight from convocation_poules.
+      return await new Promise((resolve) => {
+        db.get(
+          `SELECT licence, player_name, club, poule_number
+             FROM convocation_poules
+            WHERE tournoi_id = $1 AND REPLACE(licence, ' ', '') = $2
+            LIMIT 1`,
+          [tournoiId, normLic],
+          (err, r) => resolve(err ? null : (r || { licence: normLic, player_name: 'Joueur', club: null, poule_number: null }))
+        );
+      });
+    };
+
     for (const m of barrageCtx.matches || []) {
       const played = m.p1_points != null && m.p2_points != null;
       if (!played) continue;
       const winnerLic = m.p1_points > m.p2_points ? m.p1_licence : m.p2_licence;
       const normW = String(winnerLic).replace(/\s+/g, '');
-      const winner = (barrageCtx.barragistes || []).find(b =>
-        String(b.licence || '').replace(/\s+/g, '') === normW);
+      const winner = await findPlayer(normW);
       if (winner) qualifiers.push(mkQ('barrage_winner', winner));
     }
     for (const dq of barrageCtx.direct_qualifs || []) qualifiers.push(mkQ('direct', dq));
@@ -2635,6 +2664,22 @@ async function loadBracketQuilles(db, orgId, tournoiId, pouleCtx) {
     const nFromPoules = Math.max(0, bracketSize - (barrageCtx.direct_qualifs || []).length);
     for (const p of reranked.slice(0, nFromPoules)) qualifiers.push(mkQ('exempt', p));
     for (const dq of barrageCtx.direct_qualifs || []) qualifiers.push(mkQ('direct', dq));
+  }
+
+  // V 2.0.833 — Dedupe qualifiers by licence. The shifted serpentin (V 2.0.832
+  // deterministic tie-break) can put a player who already played the barrage
+  // back into the exempts list, then they show up again as a barrage_winner
+  // from the saved match. The first occurrence wins (exempts before barrage
+  // winners before direct_qualifs).
+  {
+    const seen = new Set();
+    for (let i = qualifiers.length - 1; i >= 0; i--) {
+      if (seen.has(qualifiers[i].licence_normalized)) qualifiers.splice(i, 1);
+      else seen.add(qualifiers[i].licence_normalized);
+    }
+    // Re-establish source priority by sorting: exempt → barrage_winner → direct
+    const srcPri = { exempt: 0, barrage_winner: 1, direct: 2 };
+    qualifiers.sort((a, b) => (srcPri[a.source] ?? 9) - (srcPri[b.source] ?? 9));
   }
 
   // 4. Apply manual seed override (DdJ may reorder seeds to match FFB ranking)
