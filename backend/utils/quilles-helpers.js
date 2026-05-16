@@ -295,11 +295,239 @@ async function computeQuillesClassement(orgId, season, mode, opts = {}) {
   return ranking;
 }
 
+// ----------------------------------------------------------------------------
+// V 2.0.816 — Sprint 2 LBIF Phase 2: backend helpers
+// ----------------------------------------------------------------------------
+
+/**
+ * Returns the LBIF bracket configuration for a given player count.
+ *
+ * Implements decision D3: if N is outside [12, 46], either falls back to
+ * single_poule mode (N<12) or throws (N>46).
+ *
+ * @param {number} nbPlayers
+ * @param {object} opts
+ * @param {object} opts.db - db-loader (required)
+ * @returns {Promise<object>} bracket config row, or a synthetic
+ *   single_poule fallback row for N<12. Shape:
+ *   { nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
+ *     has_barrage, bracket_start, bracket_size,
+ *     nb_barragistes, nb_exempts_barrage, integrer_exempts_qualif,
+ *     mode: 'lbif' | 'single_poule_fallback' }
+ * @throws {Error} if N > 46 (LBIF règlement doesn't cover, requires manual extension)
+ */
+async function getBracketConfig(nbPlayers, opts = {}) {
+  const db = opts.db || require('../db-loader');
+  const n = parseInt(nbPlayers, 10);
+  if (!Number.isFinite(n) || n < 1) {
+    throw new Error(`nbPlayers invalide: ${nbPlayers}`);
+  }
+
+  // D3: N > 46 → refuse explicitly (LBIF règlement doesn't cover)
+  if (n > 46) {
+    const err = new Error(`Configuration LBIF non disponible pour ${n} joueurs (matrice couvre 12-46). Étendez la matrice avec JC dans Données de Référence → 🎯 Quilles LBIF.`);
+    err.code = 'LBIF_MATRIX_OVERFLOW';
+    throw err;
+  }
+
+  // D3: N < 12 → fallback single_poule (1 poule intégrale round-robin)
+  if (n < 12) {
+    return {
+      nb_players: n,
+      nb_poules: 1,
+      nb_direct_qualif: 0,
+      qualified_per_poule: n, // all players go to "bracket" (= nobody, since it's already a single poule)
+      has_barrage: false,
+      bracket_start: 'semi',
+      bracket_size: 0,
+      nb_barragistes: 0,
+      nb_exempts_barrage: 0,
+      integrer_exempts_qualif: false,
+      mode: 'single_poule_fallback',
+      _warning: `N=${n} < 12 (seuil LBIF) → mode single_poule activé (1 poule intégrale, pas de bracket)`
+    };
+  }
+
+  // Standard path: lookup the seeded matrix
+  const row = await new Promise((resolve, reject) => {
+    db.get(
+      `SELECT nb_players, nb_poules, nb_direct_qualif, qualified_per_poule,
+              has_barrage, bracket_start, bracket_size,
+              nb_barragistes, nb_exempts_barrage, integrer_exempts_qualif,
+              notes
+         FROM quilles_bracket_configs
+        WHERE nb_players = $1`,
+      [n],
+      (err, r) => err ? reject(err) : resolve(r)
+    );
+  });
+
+  if (!row) {
+    const err = new Error(`Configuration LBIF manquante pour ${n} joueurs. Vérifiez la table quilles_bracket_configs (devrait être seedée par la migration V 2.0.814).`);
+    err.code = 'LBIF_MATRIX_MISSING';
+    throw err;
+  }
+
+  return { ...row, mode: 'lbif' };
+}
+
+// ----------------------------------------------------------------------------
+// resolveLbifPoints
+// ----------------------------------------------------------------------------
+
+// LBIF Code Sportif chap 1.1.1.G + 3.1.G — points attribués par tournoi
+// (identique pour 5Q et 9Q). Identifie la "position" du joueur dans le tournoi.
+const LBIF_POINTS_MAP = {
+  '1st':            25,  // Vainqueur
+  '2nd':            20,  // Finaliste
+  'semi':           15,  // 1/2 finaliste (perdant de demi-finale)
+  'quarter':        11,  // 1/4 de finale (perdant de quart)
+  'eighth':          8,  // 1/8 de finale (perdant de huitième)
+  'barrage':         5,  // Éliminé en barrage
+  'poule_3rd_1win':  3,  // 3ème de poule avec 1 victoire
+  'poule_3rd_0win':  1   // 3ème de poule avec 0 victoire
+};
+
+/**
+ * Returns the LBIF points for a given position in a Quilles tournament.
+ *
+ * @param {string} position - one of LBIF_POINTS_MAP keys
+ * @returns {number} 0 if position unknown
+ */
+function resolveLbifPoints(position) {
+  return LBIF_POINTS_MAP[position] || 0;
+}
+
+/**
+ * Maps an internal DdJ "final_place" + context to an LBIF position label
+ * that can be passed to resolveLbifPoints.
+ *
+ * @param {object} ctx
+ * @param {number} ctx.final_place - 1, 2, 3, 4, ... (1-based)
+ * @param {boolean} ctx.qualified_for_bracket - true if reached the bracket
+ *   (either via exempt, barrage win, or direct qualification)
+ * @param {boolean} ctx.went_to_barrage - true if played at least one barrage match
+ * @param {string|null} ctx.bracket_phase_reached - 'eighth' | 'quarter' | 'semi' | 'final'
+ *   (the deepest bracket phase the player entered)
+ * @param {boolean} ctx.eliminated_in_poule - true if eliminated at poule stage (3rd of poule)
+ * @param {number} ctx.poule_match_wins - number of wins in poule (only used when eliminated_in_poule)
+ * @returns {string} LBIF position key (key of LBIF_POINTS_MAP)
+ */
+function mapPlaceToLbifPosition(ctx) {
+  if (ctx.final_place === 1) return '1st';
+  if (ctx.final_place === 2) return '2nd';
+  if (ctx.final_place === 3 || ctx.final_place === 4) return 'semi';
+
+  if (ctx.qualified_for_bracket) {
+    // Reached bracket but didn't make the SF
+    if (ctx.bracket_phase_reached === 'quarter' || (ctx.final_place >= 5 && ctx.final_place <= 8)) return 'quarter';
+    if (ctx.bracket_phase_reached === 'eighth' || (ctx.final_place >= 9 && ctx.final_place <= 16)) return 'eighth';
+    return 'eighth'; // safe default for "qualified but eliminated early"
+  }
+
+  if (ctx.went_to_barrage) return 'barrage';
+
+  // Eliminated at poule stage (3rd of poule)
+  if (ctx.eliminated_in_poule) {
+    return (ctx.poule_match_wins && ctx.poule_match_wins > 0) ? 'poule_3rd_1win' : 'poule_3rd_0win';
+  }
+
+  return 'poule_3rd_0win'; // safe default
+}
+
+// ----------------------------------------------------------------------------
+// computeReclassementSerpentin
+// ----------------------------------------------------------------------------
+
+/**
+ * Reclassifies players for the serpentin distribution between phases.
+ * Implements decision D2: Points match → Total points marqués → tirage au sort.
+ *
+ * Used between poules → barrage, and between barrage → bracket.
+ *
+ * @param {Array<{licence, player_name, match_points, points_scored, ...}>} players
+ * @param {object} opts
+ * @param {function} [opts.rng] - random source for tie-break (defaults to Math.random)
+ * @returns {Array} same players, sorted by LBIF criteria (best first), each with
+ *   added field `serpentin_rank` (1-based).
+ */
+function computeReclassementSerpentin(players, opts = {}) {
+  const rng = opts.rng || Math.random;
+  // Stable sort by 2 criteria, with random tie-break for the rest.
+  // We attach a random key to each player BEFORE the sort so the tie-break
+  // is deterministic within a single call (and the random can be seeded for tests).
+  const enriched = players.map(p => ({
+    ...p,
+    _tieBreak: rng()
+  }));
+
+  enriched.sort((a, b) => {
+    // 1. Points match descending
+    const aMp = a.match_points || 0;
+    const bMp = b.match_points || 0;
+    if (bMp !== aMp) return bMp - aMp;
+    // 2. Total points marqués descending (D2)
+    const aPts = a.points_scored || a.points || 0;
+    const bPts = b.points_scored || b.points || 0;
+    if (bPts !== aPts) return bPts - aPts;
+    // 3. Random tie-break (LBIF règlement implicite)
+    return a._tieBreak - b._tieBreak;
+  });
+
+  return enriched.map((p, idx) => {
+    // Strip the tie-break key from the output (internal-only)
+    const { _tieBreak, ...rest } = p;
+    return { ...rest, serpentin_rank: idx + 1 };
+  });
+}
+
+// ----------------------------------------------------------------------------
+// distributeSerpentin
+// ----------------------------------------------------------------------------
+
+/**
+ * Distributes ranked players into N poules using the serpentin algorithm.
+ * Example: 12 players in 4 poules:
+ *   rank 1 → poule 1, rank 2 → poule 2, rank 3 → poule 3, rank 4 → poule 4,
+ *   rank 5 → poule 4, rank 6 → poule 3, rank 7 → poule 2, rank 8 → poule 1,
+ *   rank 9 → poule 1, ... (snake pattern)
+ *
+ * @param {Array} rankedPlayers - players already sorted by computeReclassementSerpentin
+ * @param {number} nbPoules
+ * @returns {Array<Array>} poules[i] = array of players for poule i+1
+ */
+function distributeSerpentin(rankedPlayers, nbPoules) {
+  if (!Array.isArray(rankedPlayers) || nbPoules < 1) return [];
+  const poules = Array.from({ length: nbPoules }, () => []);
+  let direction = 1; // 1 = forward, -1 = backward
+  let pouleIdx = 0;
+
+  for (let i = 0; i < rankedPlayers.length; i++) {
+    poules[pouleIdx].push(rankedPlayers[i]);
+    // Advance with serpentine direction
+    if (direction === 1) {
+      if (pouleIdx === nbPoules - 1) { direction = -1; }
+      else { pouleIdx++; }
+    } else {
+      if (pouleIdx === 0) { direction = 1; }
+      else { pouleIdx--; }
+    }
+  }
+  return poules;
+}
+
 module.exports = {
   QUILLES_MODES,
   isQuillesMode,
   resolveDistance,
   computeQuillesClassement,
+  // V 2.0.816 — Phase 2 helpers
+  getBracketConfig,
+  resolveLbifPoints,
+  mapPlaceToLbifPosition,
+  computeReclassementSerpentin,
+  distributeSerpentin,
+  LBIF_POINTS_MAP,
   // Exposed for tests
   _normaliseMode
 };

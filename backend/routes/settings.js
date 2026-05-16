@@ -2834,6 +2834,42 @@ router.get('/quilles/resolve-distance/:tournoiId', authenticateToken, async (req
 });
 
 // ============================================================================
+// V 2.0.816 — Sprint 2 LBIF Phase 2: helpers test endpoints
+//
+// GET /api/settings/quilles/bracket-config/:nbPlayers
+// Returns the LBIF bracket configuration for a given player count, including
+// fallback for N<12 (single_poule) and explicit error for N>46.
+//
+// GET /api/settings/quilles/lbif-points/:position
+// Returns the LBIF points for a given position label (1st, 2nd, semi, ...).
+// ============================================================================
+router.get('/quilles/bracket-config/:nbPlayers', authenticateToken, async (req, res) => {
+  const db = getDb();
+  const n = parseInt(req.params.nbPlayers, 10);
+  if (!Number.isFinite(n)) return res.status(400).json({ error: 'nbPlayers invalide' });
+  try {
+    const { getBracketConfig } = require('../utils/quilles-helpers');
+    const cfg = await getBracketConfig(n, { db });
+    res.json(cfg);
+  } catch (err) {
+    res.status(err.code === 'LBIF_MATRIX_OVERFLOW' ? 422 : 500).json({
+      error: err.message,
+      code: err.code || null
+    });
+  }
+});
+
+router.get('/quilles/lbif-points/:position', authenticateToken, (req, res) => {
+  const { resolveLbifPoints, LBIF_POINTS_MAP } = require('../utils/quilles-helpers');
+  const points = resolveLbifPoints(req.params.position);
+  res.json({
+    position: req.params.position,
+    points,
+    barème: LBIF_POINTS_MAP
+  });
+});
+
+// ============================================================================
 // V 2.0.784 — CRUD endpoints for Quilles tournament types
 // Admin can add/rename/reorder/deactivate types (régional, qualif_n1, ...)
 // from the Settings UI. Reference data is global (not org-scoped) since the
