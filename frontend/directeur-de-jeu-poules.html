@@ -461,7 +461,7 @@
               <strong>${p.lbif.nb_barragistes || 0}</strong> barragiste(s) ·
               <strong>${p.lbif.nb_exempts_barrage || 0}</strong> exempt(s) du barrage ·
               Barrage : <strong>${p.lbif.has_barrage ? 'Oui' : 'Non'}</strong> ·
-              Bracket : <strong>${p.lbif.bracket_size || '?'} joueurs</strong> (entrée ${p.lbif.bracket_start === 'eighth' ? '1/8' : p.lbif.bracket_start === 'quarter' ? '1/4' : '1/2'}) ·
+              Tableau final : <strong>${p.lbif.bracket_size || '?'} joueurs</strong> (entrée ${p.lbif.bracket_start === 'eighth' ? '1/8' : p.lbif.bracket_start === 'quarter' ? '1/4' : '1/2'}) ·
               Distance qualif : <strong>${p.lbif.distance_qualif || '?'} pts</strong>
             </div>
             ${w}
@@ -494,7 +494,7 @@
         directQualifsHtml = `
           <div class="ddj-poule-card" style="border-color: #c8102e; background: #fff8f8; margin-bottom: 14px;">
             <div class="ddj-poule-header" style="border-bottom-color: #c8102e;">
-              <div class="ddj-poule-title" style="color: #c8102e;">🎯 Qualifiés d'office (bracket direct)</div>
+              <div class="ddj-poule-title" style="color: #c8102e;">🎯 Qualifiés d'office (tableau final direct)</div>
               <div class="ddj-poule-size" style="background: #c8102e; color: white;">${p.direct_qualifs.length} joueur(s)</div>
             </div>
             <div style="font-size: 11px; color: #666; padding: 0 4px 8px; font-style: italic;">
