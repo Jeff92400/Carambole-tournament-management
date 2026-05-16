@@ -4560,8 +4560,14 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
       ffb_classement: ffbClassement
     });
   } catch (err) {
+    // V 2.0.837 — surface the real error message so we can diagnose Quilles
+    // recap 500s in production without Railway log access.
     console.error('[DdJ] /recap error:', err);
-    res.status(500).json({ error: 'Erreur lors du chargement du récapitulatif' });
+    res.status(500).json({
+      error: 'Erreur lors du chargement du récapitulatif',
+      detail: err && err.message ? err.message : String(err),
+      stack: err && err.stack ? err.stack.split('\n').slice(0, 5).join(' | ') : null
+    });
   }
 });
 
