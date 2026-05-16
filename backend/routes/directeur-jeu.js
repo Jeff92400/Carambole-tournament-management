@@ -1663,7 +1663,11 @@ async function loadPouleMatches(db, orgId, tournoiId) {
     console.error('[DdJ loadPouleMatches] Quilles resolveDistance error:', e.message);
   }
 
-  // Load poule composition ordered canonically
+  // Load poule composition ordered canonically.
+  // V 2.0.819 — Sprint 2 LBIF Phase 3 fix: EXCLUDE direct qualifiers
+  // (is_direct_qualif=true, poule_number=0). They don't play in poules,
+  // they go straight to the bracket. The matchs / bracket pages will
+  // re-load them via a dedicated query when needed.
   const rows = await new Promise((resolve, reject) => {
     db.all(
       `SELECT cp.licence, cp.player_name, cp.club, cp.poule_number, cp.player_order,
@@ -1674,6 +1678,8 @@ async function loadPouleMatches(db, orgId, tournoiId) {
          AND ($2::int IS NULL OR p.organization_id = $2)
        WHERE cp.tournoi_id = $1
          AND UPPER(cp.licence) NOT LIKE 'TEST%'
+         AND COALESCE(cp.is_direct_qualif, FALSE) = FALSE
+         AND cp.poule_number > 0
        ORDER BY cp.poule_number, cp.player_order NULLS LAST, cp.licence`,
       [tournoiId, orgId],
       (err, rs) => err ? reject(err) : resolve(rs || [])
