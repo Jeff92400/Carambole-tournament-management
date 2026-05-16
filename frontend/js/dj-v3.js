@@ -644,6 +644,13 @@
   //     from the round-robin results)
   function renderPlanningHtml(poulesData, bracketData, consoData) {
     const isSinglePoule = poulesData && poulesData.mode === 'single_poule';
+    // V 2.0.811 — Quilles tournaments have no consolante (LBIF règlement:
+    // non-qualifiers are ex-aequo, no classification matches). Skip the
+    // "Matchs de classement" section so the planning doesn't show an
+    // empty placeholder for Quilles.
+    const tMode = (poulesData && poulesData.tournament && poulesData.tournament.mode || '').toUpperCase();
+    const isQuillesPlan = tMode === '5Q' || tMode === '9Q'
+                       || tMode === '5 QUILLES' || tMode === '9 QUILLES';
     let html = `<h3>📋 Planning du jour <span class="djv3-close">×</span></h3>`;
 
     // ----- Phase 1 : poules -----
@@ -709,23 +716,25 @@
         <div class="djv3-pl-empty djv3-pl-empty-sub">Disponible une fois les poules terminées.</div></div>`;
     }
 
-    // ----- Phase 3 : matchs de classement -----
-    if (consoData && consoData.can_start && Array.isArray(consoData.phases)) {
-      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>`;
-      for (const ph of consoData.phases) {
-        // V 2.0.710 — skip only TRUE round-1 byes (has_bye AND no
-        // depends_on, i.e. one player auto-advances and there's no
-        // opponent coming from upstream). Cascaded byes (has_bye AND
-        // depends_on non-empty, i.e. waiting on an upstream result) are
-        // real matches and stay visible with their pre-allocated table.
-        const isPureBye = ph.has_bye && (!Array.isArray(ph.depends_on) || ph.depends_on.length === 0);
-        if (isPureBye) continue;
-        html += renderPlanningPhaseRow(ph, 'consolante');
+    // ----- Phase 3 : matchs de classement (skipped for Quilles) -----
+    if (!isQuillesPlan) {
+      if (consoData && consoData.can_start && Array.isArray(consoData.phases)) {
+        html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>`;
+        for (const ph of consoData.phases) {
+          // V 2.0.710 — skip only TRUE round-1 byes (has_bye AND no
+          // depends_on, i.e. one player auto-advances and there's no
+          // opponent coming from upstream). Cascaded byes (has_bye AND
+          // depends_on non-empty, i.e. waiting on an upstream result) are
+          // real matches and stay visible with their pre-allocated table.
+          const isPureBye = ph.has_bye && (!Array.isArray(ph.depends_on) || ph.depends_on.length === 0);
+          if (isPureBye) continue;
+          html += renderPlanningPhaseRow(ph, 'consolante');
+        }
+        html += `</div>`;
+      } else {
+        html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>
+          <div class="djv3-pl-empty djv3-pl-empty-sub">Disponible une fois les poules terminées.</div></div>`;
       }
-      html += `</div>`;
-    } else {
-      html += `<div class="djv3-pl-section"><h4 class="djv3-pl-title">Matchs de classement</h4>
-        <div class="djv3-pl-empty djv3-pl-empty-sub">Disponible une fois les poules terminées.</div></div>`;
     }
 
     return html;
