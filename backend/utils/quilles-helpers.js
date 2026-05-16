@@ -445,20 +445,33 @@ function mapPlaceToLbifPosition(ctx) {
  *
  * Used between poules → barrage, and between barrage → bracket.
  *
+ * V 2.0.832 — Tie-break changed from Math.random() to a DETERMINISTIC
+ * licence-based ordering. Background: the previous random tie-break ran on
+ * every call, so the TV (which polls /feed every 5 s) re-ranked tied players
+ * on each poll and the displayed order kept flipping (Eric B. P3 ↔ Eric B. P5
+ * etc. — observed in production V 2.0.831). The LBIF règlement says
+ * "tirage au sort" for true ties, but in practice the DdJ does the draw ONCE
+ * (then enters it via the existing seed override mechanism) — the algorithm
+ * must therefore be repeatable across calls. Licence ordering is the same
+ * deterministic fallback used by computeBracketSeeding() for carambole.
+ * Pass opts.rng for tests if you want randomised behaviour.
+ *
  * @param {Array<{licence, player_name, match_points, points_scored, ...}>} players
  * @param {object} opts
- * @param {function} [opts.rng] - random source for tie-break (defaults to Math.random)
+ * @param {function} [opts.rng] - if provided, used as the tie-break source
+ *   instead of the deterministic licence ordering. Mainly for tests.
  * @returns {Array} same players, sorted by LBIF criteria (best first), each with
  *   added field `serpentin_rank` (1-based).
  */
 function computeReclassementSerpentin(players, opts = {}) {
-  const rng = opts.rng || Math.random;
-  // Stable sort by 2 criteria, with random tie-break for the rest.
-  // We attach a random key to each player BEFORE the sort so the tie-break
-  // is deterministic within a single call (and the random can be seeded for tests).
+  const rng = opts.rng || null;
+  // Attach a tie-break key BEFORE sort so the value is stable within a single
+  // call (consistent if the comparator is invoked multiple times for the same
+  // pair). When opts.rng is omitted, we use the licence as the tie-break,
+  // which makes the whole function pure (same input → same output).
   const enriched = players.map(p => ({
     ...p,
-    _tieBreak: rng()
+    _tieBreak: rng ? rng() : String(p.licence || '')
   }));
 
   enriched.sort((a, b) => {
@@ -470,8 +483,9 @@ function computeReclassementSerpentin(players, opts = {}) {
     const aPts = a.points_scored || a.points || 0;
     const bPts = b.points_scored || b.points || 0;
     if (bPts !== aPts) return bPts - aPts;
-    // 3. Random tie-break (LBIF règlement implicite)
-    return a._tieBreak - b._tieBreak;
+    // 3. Deterministic tie-break (licence) — see header comment.
+    if (typeof a._tieBreak === 'number') return a._tieBreak - b._tieBreak;
+    return String(a._tieBreak).localeCompare(String(b._tieBreak));
   });
 
   return enriched.map((p, idx) => {
