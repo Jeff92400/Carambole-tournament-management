@@ -17,6 +17,7 @@
  * ----------------------------------------------------------------------------
  */
 (function () {
+  // Carambole (default) — 7 steps with Classement (consolante)
   const STEP_URLS = [
     'directeur-de-jeu.html',                 // 0 - Sélection (landing, no compId)
     'directeur-de-jeu-pointage.html',        // 1 - Pointage
@@ -26,8 +27,6 @@
     'directeur-de-jeu-classement.html',      // 5 - Classement (Consolante)
     'directeur-de-jeu-recap.html'            // 6 - Récapitulatif
   ];
-
-  // Short labels for tooltip + visible active label.
   const STEP_LABELS = [
     'Sélection',
     'Pointage',
@@ -35,6 +34,29 @@
     'Matchs de poule',
     'Tableau final',
     'Classement',
+    'Récapitulatif'
+  ];
+
+  // V 2.0.825 — Quilles LBIF variant : Barrage replaces Classement.
+  // Activate by adding data-mode="quilles" on the .ddj-steps element.
+  // 7 steps: Sélection → Pointage → Poules → Matchs poules → Barrage →
+  // Tableau final → Récap (no consolante per LBIF règlement).
+  const STEP_URLS_QUILLES = [
+    'directeur-de-jeu.html',                 // 0 - Sélection
+    'directeur-de-jeu-pointage.html',        // 1 - Pointage
+    'directeur-de-jeu-poules.html',          // 2 - Poules
+    'directeur-de-jeu-matchs.html',          // 3 - Matchs de poule
+    'directeur-de-jeu-barrage.html',         // 4 - Barrage (LBIF only)
+    'directeur-de-jeu-bracket.html',         // 5 - Tableau final
+    'directeur-de-jeu-recap.html'            // 6 - Récapitulatif
+  ];
+  const STEP_LABELS_QUILLES = [
+    'Sélection',
+    'Pointage',
+    'Poules',
+    'Matchs de poule',
+    'Barrage',
+    'Tableau final',
     'Récapitulatif'
   ];
 
@@ -108,10 +130,16 @@
   function wireDdjSteps() {
     injectStyles();
     const compId = new URLSearchParams(window.location.search).get('compId');
+    // V 2.0.825 — Quilles variant detected via data-mode="quilles" on .ddj-steps
+    const stepsContainer = document.querySelector('.ddj-steps');
+    const isQuilles = stepsContainer && stepsContainer.getAttribute('data-mode') === 'quilles';
+    const URLS = isQuilles ? STEP_URLS_QUILLES : STEP_URLS;
+    const LABELS = isQuilles ? STEP_LABELS_QUILLES : STEP_LABELS;
+
     const dots = document.querySelectorAll('.ddj-steps .dot');
 
     dots.forEach((dot, idx) => {
-      const label = STEP_LABELS[idx] || '';
+      const label = LABELS[idx] || '';
       dot.setAttribute('data-step-name', label);
       dot.setAttribute('title', label); // native fallback + accessibility
 
@@ -123,7 +151,7 @@
         dot.appendChild(tag);
       }
 
-      const url = STEP_URLS[idx];
+      const url = URLS[idx];
       if (!url) return;
       if (dot.classList.contains('active')) return; // current page — no self-nav
 

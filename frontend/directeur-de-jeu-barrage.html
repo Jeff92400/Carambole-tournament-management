@@ -199,6 +199,17 @@
 
     <div id="errorMessage" class="error" style="display: none;"></div>
 
+    <!-- V 2.0.825 — Stepper Quilles (7 dots, "Barrage" remplace "Classement"). -->
+    <div class="ddj-steps" data-mode="quilles" title="Étape 5 sur 7 : Barrage">
+      <div class="dot done"></div>
+      <div class="dot done"></div>
+      <div class="dot done"></div>
+      <div class="dot done"></div>
+      <div class="dot active"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+
     <div class="ddj-welcome-bar">
       <div>
         <div class="tournament-title" id="tournamentTitle">Chargement…</div>
@@ -212,7 +223,7 @@
 
   <script src="js/auth-utils.js?v=197"></script>
   <script src="js/app-branding.js?v=216"></script>
-  <script src="js/ddj-step-nav.js?v=3"></script>
+  <script src="js/ddj-step-nav.js?v=4"></script>
   <script src="js/quilles-banner.js?v=1"></script>
   <script src="js/dj-v3.js?v=10"></script>
   <script>
@@ -303,7 +314,7 @@
       // Build summary cards (barragistes, exempts, direct qualifs)
       const exemptsCard = (ctx.exempts || []).length === 0 ? '' : `
         <div class="info-card exempts">
-          <div class="card-title">⏭️ Exemptés du barrage (vont direct au bracket) — ${ctx.exempts.length}</div>
+          <div class="card-title">⏭️ Exemptés du barrage (vont direct au tableau final) — ${ctx.exempts.length}</div>
           ${ctx.exempts.map(p => `
             <div class="player-row">
               <div class="rank">${p.serpentin_rank}</div>
