@@ -887,6 +887,115 @@ router.post('/competitions/:id/poules/generate', authenticateToken, requireDdJ, 
       sorted.sort((a, b) => (b.moyenne_ffb || 0) - (a.moyenne_ffb || 0));
     }
 
+    // V 2.0.818 — Sprint 2 LBIF Phase 3: Quilles tournaments follow the
+    // LBIF règlement (Code Sportif chap 1.1.1.E) — poules of 3 strict +
+    // qualifiés d'office identifiés par le ranking. Bypass carambole logic.
+    const { isQuillesMode: _isQ_lbif } = require('../utils/quilles-helpers');
+    if (_isQ_lbif(tournament.mode)) {
+      try {
+        const { getBracketConfig, distributeSerpentin, resolveDistance } = require('../utils/quilles-helpers');
+        const lbifCfg = await getBracketConfig(sorted.length, { db });
+
+        // Validate distance can be resolved for the qualification phase
+        const resolvedDist = await resolveDistance(tournament, lbifCfg.nb_poules, { db, phase: 'qualif' });
+        if (resolvedDist.distance == null) {
+          return res.status(400).json({
+            error: `Impossible de déterminer la distance pour ce tournoi Quilles : ${resolvedDist.warning || 'configuration incomplète'}. Vérifiez la matrice 5Q (et nb_tables) ou la distance fixe 9Q dans les paramètres du tournoi.`
+          });
+        }
+
+        // LBIF: top N (par ranking) = qualifiés d'office. Le reste va en poules.
+        const directQualifs = sorted.slice(0, lbifCfg.nb_direct_qualif);
+        const pouleEligible = sorted.slice(lbifCfg.nb_direct_qualif);
+
+        // Sanity check: les joueurs en poule doivent former exactement nb_poules × 3
+        // (sauf en mode single_poule_fallback pour N<12).
+        if (lbifCfg.mode === 'lbif' && pouleEligible.length !== lbifCfg.nb_poules * 3) {
+          return res.status(400).json({
+            error: `Incohérence LBIF : ${sorted.length} joueurs présents - ${lbifCfg.nb_direct_qualif} qualifiés d'office = ${pouleEligible.length}, mais la matrice attend ${lbifCfg.nb_poules}×3=${lbifCfg.nb_poules*3} joueurs en poules. Vérifiez la matrice quilles_bracket_configs pour ${sorted.length} joueurs.`
+          });
+        }
+
+        // Distribute via serpentin (les joueurs sont déjà triés par ranking)
+        const distributedArr = distributeSerpentin(pouleEligible, Math.max(1, lbifCfg.nb_poules));
+        const poules = distributedArr.map((arr, idx) => ({
+          number: idx + 1,
+          size: arr.length,
+          players: arr.map((p, i) => ({ ...p, serpentine_rank: i + 1 }))
+        }));
+
+        const proposal = {
+          tournament: {
+            id: tournament.tournoi_id,
+            nom: tournament.nom,
+            mode: tournament.mode,
+            categorie: tournament.categorie,
+            debut: tournament.debut,
+            season
+          },
+          seed_source: seedSource,
+          total_players: sorted.length,
+          total_poules: lbifCfg.nb_poules,
+          tables_needed: tournament.nb_tables || lbifCfg.nb_poules,
+          description: lbifCfg.mode === 'single_poule_fallback'
+            ? `Mode single poule (N=${sorted.length} < 12 LBIF) — 1 poule intégrale`
+            : `${lbifCfg.nb_poules} poule(s) de 3 joueurs${lbifCfg.nb_direct_qualif > 0 ? ' + ' + lbifCfg.nb_direct_qualif + ' qualifié(s) d\'office' : ''}`,
+          lbif: {
+            nb_direct_qualif: lbifCfg.nb_direct_qualif,
+            nb_barragistes: lbifCfg.nb_barragistes,
+            nb_exempts_barrage: lbifCfg.nb_exempts_barrage,
+            has_barrage: lbifCfg.has_barrage,
+            bracket_start: lbifCfg.bracket_start,
+            bracket_size: lbifCfg.bracket_size,
+            mode: lbifCfg.mode,
+            warning: lbifCfg._warning || null,
+            distance_qualif: resolvedDist.distance,
+            distance_source: resolvedDist.source
+          },
+          poules: poules.map(pl => ({
+            number: pl.number,
+            size: pl.size,
+            players: pl.players.map(p => ({
+              licence: p.licence,
+              licence_normalized: String(p.licence || '').replace(/\s+/g, ''),
+              player_name: p.player_name || `${p.last_name || ''} ${p.first_name || ''}`.trim(),
+              first_name: p.first_name,
+              last_name: p.last_name,
+              club: p.club,
+              season_rank: p.season_rank,
+              moyenne_ffb: p.moyenne_ffb,
+              serpentine_rank: p.serpentine_rank,
+              location_name: p.location_name,
+              location_address: p.location_address,
+              start_time: p.start_time
+            }))
+          })),
+          // V 2.0.818 — Direct qualifiers go straight to bracket (no poule).
+          // The PUT /poules handler saves them with poule_number=0 + is_direct_qualif=true.
+          direct_qualifs: directQualifs.map(p => ({
+            licence: p.licence,
+            licence_normalized: String(p.licence || '').replace(/\s+/g, ''),
+            player_name: p.player_name || `${p.last_name || ''} ${p.first_name || ''}`.trim(),
+            first_name: p.first_name,
+            last_name: p.last_name,
+            club: p.club,
+            season_rank: p.season_rank,
+            moyenne_ffb: p.moyenne_ffb,
+            location_name: p.location_name,
+            location_address: p.location_address,
+            start_time: p.start_time
+          }))
+        };
+        return res.json(proposal);
+      } catch (lbifErr) {
+        console.error('[DdJ] /poules/generate LBIF error:', lbifErr);
+        return res.status(lbifErr.code === 'LBIF_MATRIX_OVERFLOW' ? 422 : 500).json({
+          error: lbifErr.message,
+          code: lbifErr.code || null
+        });
+      }
+    }
+
     // Compute poule sizes using the org's allow_poule_of_2 setting.
     // V 2.0.789 — mode passed so Quilles tournaments use the per-mode
     // override (allow_poule_of_2_5q / allow_poule_of_2_9q).
@@ -969,7 +1078,10 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
   const db = getDb();
   const orgId = req.user.organizationId || null;
   const tournoiId = parseInt(req.params.id, 10);
-  const { poules } = req.body || {};
+  // V 2.0.818 — Sprint 2 LBIF Phase 3: accept direct_qualifs (LBIF qualifiés
+  // d'office, jamais joué en poule, vont directement au bracket).
+  // Saved as convocation_poules rows with poule_number=0 + is_direct_qualif=true.
+  const { poules, direct_qualifs } = req.body || {};
 
   if (!Number.isFinite(tournoiId)) {
     return res.status(400).json({ error: 'ID tournoi invalide' });
@@ -1068,6 +1180,44 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
       }
     }
 
+    // V 2.0.818 — Sprint 2 LBIF Phase 3: persist direct qualifiers (Quilles
+    // LBIF "qualifiés d'office"). poule_number = 0 marks them as out-of-poule,
+    // is_direct_qualif = TRUE flags them for the bracket setup later.
+    let directQualifsInserted = 0;
+    if (Array.isArray(direct_qualifs)) {
+      for (let idx = 0; idx < direct_qualifs.length; idx++) {
+        const rawLicence = direct_qualifs[idx].licence;
+        if (!rawLicence) continue;
+        const licNorm = String(rawLicence).replace(/\s+/g, '');
+        const snap = snapshotByLic.get(licNorm) || {};
+        const pl = playersByLic.get(licNorm) || {};
+        const displayName = [pl.first_name, pl.last_name].filter(Boolean).join(' ')
+          || direct_qualifs[idx].player_name || rawLicence;
+
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO convocation_poules
+               (tournoi_id, poule_number, licence, player_name, club,
+                location_name, location_address, start_time, player_order,
+                is_direct_qualif)
+             VALUES ($1, 0, $2, $3, $4, $5, $6, $7, $8, TRUE)`,
+            [
+              tournoiId,
+              rawLicence,
+              displayName,
+              pl.club || null,
+              snap.location_name || null,
+              snap.location_address || null,
+              snap.start_time || null,
+              idx + 1
+            ],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+        directQualifsInserted++;
+      }
+    }
+
     // V 2.0.746 — Stamp poules_saved_at so étape 3 can warn if the composition
     // is stale (validated before today, suggesting last-minute forfaits were not
     // reflected in a poule regeneration).
@@ -1105,7 +1255,8 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
       success: true,
       tournoi_id: tournoiId,
       poules_count: poules.length,
-      players_count: totalInserted
+      players_count: totalInserted,
+      direct_qualifs_count: directQualifsInserted
     });
   } catch (err) {
     console.error('[DdJ] /poules PUT error:', err);

@@ -1295,6 +1295,13 @@ async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_convocation_poules_tournoi ON convocation_poules(tournoi_id)
     `);
 
+    // V 2.0.818 — Sprint 2 LBIF Phase 3: flag a player as "qualifié d'office"
+    // in convocation_poules. Such a player has no poule (poule_number = 0)
+    // and goes directly to the bracket per LBIF règlement chap 1.1.1.E.
+    // Identified by the admin during /poules/generate via the LBIF matrix
+    // (nb_direct_qualif = 1 or 2 when N inscrits = 3k+1 or 3k+2).
+    await client.query(`ALTER TABLE convocation_poules ADD COLUMN IF NOT EXISTS is_direct_qualif BOOLEAN DEFAULT FALSE`);
+
     // V 2.0.767 (2026-05-15) — DdJ check-in inversion. The pointage screen now
     // requires the Directeur de Jeu to explicitly tick each present player
     // (instead of defaulting everyone to "present"). Necessary for large
