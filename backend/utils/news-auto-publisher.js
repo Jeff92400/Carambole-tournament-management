@@ -298,13 +298,32 @@ function ctaButton(href, label) {
 // degrades to a short factual line.
 async function fetchPodium(tournamentId) {
   try {
+    // V 2.0.821 — Do NOT trust tr.position. Symptom observed on
+    // CDBHS T3 Cadre 42/2 R1 (Jeff's screenshot, 16/05/2026):
+    // article showed PHILIPPE BUISSON (0 PM, moy 2.540) as winner
+    // while the results page correctly displays LAURENT LEVY (4 PM,
+    // moy 5.161) at rank 1. The DB had position=1 for Philippe,
+    // because something in the E2i import path overwrites the values
+    // that recalculatePositions() had just written.
+    //
+    // Robust fix: re-rank inside the query using ROW_NUMBER over the
+    // same expression the results page uses (match_points DESC,
+    // moyenne DESC). The article now matches the screen even if the
+    // position column is stale/wrong.
     const result = await db.query(
-      `SELECT tr.position, tr.licence, tr.points, tr.reprises,
+      `SELECT ranked.position, ranked.licence, ranked.points, ranked.reprises,
               p.first_name, p.last_name, p.club AS club_name
-         FROM tournament_results tr
-         LEFT JOIN players p ON p.licence = tr.licence
-        WHERE tr.tournament_id = $1 AND tr.position IS NOT NULL
-        ORDER BY tr.position ASC
+         FROM (
+           SELECT ROW_NUMBER() OVER (
+                    ORDER BY tr.match_points DESC NULLS LAST,
+                             tr.moyenne DESC NULLS LAST
+                  ) AS position,
+                  tr.licence, tr.points, tr.reprises
+             FROM tournament_results tr
+            WHERE tr.tournament_id = $1
+         ) ranked
+         LEFT JOIN players p ON p.licence = ranked.licence
+        ORDER BY ranked.position ASC
         LIMIT 3`,
       [tournamentId]
     );
@@ -335,15 +354,22 @@ async function fetchParticipantCount(tournamentId) {
 // match what the rankings page shows so admins recognize the layout.
 async function fetchTournamentResults(tournamentId) {
   try {
+    // V 2.0.821 — Same reasoning as fetchPodium above: re-rank inside
+    // the query rather than trusting a potentially stale tr.position
+    // column. Keeps the article table consistent with the results page.
     const result = await db.query(
-      `SELECT tr.position, tr.licence, tr.player_name, tr.match_points,
+      `SELECT ROW_NUMBER() OVER (
+                ORDER BY tr.match_points DESC NULLS LAST,
+                         tr.moyenne DESC NULLS LAST
+              ) AS position,
+              tr.licence, tr.player_name, tr.match_points,
               tr.points, tr.reprises, tr.serie, tr.moyenne, tr.position_points,
               tr.bonus_points, tr.poule_rank,
               p.first_name, p.last_name, p.club AS club_name
          FROM tournament_results tr
          LEFT JOIN players p ON p.licence = tr.licence
         WHERE tr.tournament_id = $1
-        ORDER BY COALESCE(tr.position, 999) ASC, tr.match_points DESC`,
+        ORDER BY position ASC`,
       [tournamentId]
     );
     return result.rows || [];
