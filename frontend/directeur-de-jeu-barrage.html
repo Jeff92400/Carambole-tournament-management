@@ -385,7 +385,7 @@
           else if (m.p2_points > m.p1_points) { col1Class += ' loser'; col2Class += ' winner'; }
         }
         return `
-          <div class="match-card ${isPlayed ? 'played' : ''}" data-match="${m.match_number}">
+          <div class="match-card ${isPlayed ? 'played' : ''}" data-match="${m.match_number}" data-distance="${dist || ''}">
             <div class="match-card-header">
               <div class="match-title">⚔️ Match ${m.match_number}${m.table_number ? ` · Table ${m.table_number}` : ''}</div>
               <div class="match-status ${isPlayed ? 'played' : ''}">${isPlayed ? '✓ Terminé' : 'À jouer'}</div>
@@ -477,6 +477,21 @@
       if (parseInt(p1, 10) === parseInt(p2, 10)) {
         alert('Pas de match nul en barrage (élimination directe).');
         return;
+      }
+      // V 2.0.828 — Validate against the current Distance (read from data-distance
+      // on the card, which is set at render-time from ctx.game_params.distance).
+      // The Distance is editable up until the DdJ starts so re-rendering after
+      // a change automatically updates this max.
+      const maxDist = parseInt(card.getAttribute('data-distance'), 10);
+      if (Number.isFinite(maxDist) && maxDist > 0) {
+        const n1 = parseInt(p1, 10), n2 = parseInt(p2, 10);
+        if (n1 > maxDist || n2 > maxDist) {
+          alert(`❌ Score invalide : la distance autorisée est ${maxDist} pts.\n\nValeurs saisies : ${n1} / ${n2}`);
+          return;
+        }
+        if (n1 < maxDist && n2 < maxDist) {
+          if (!confirm(`Aucun joueur n'a atteint la distance (${maxDist} pts).\n\nValeurs : ${n1} / ${n2}.\n\nConfirmer quand même ?`)) return;
+        }
       }
       try {
         const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/barrage`, {

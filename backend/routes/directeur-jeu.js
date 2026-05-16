@@ -2810,6 +2810,44 @@ router.put('/competitions/:id/barrage', authenticateToken, requireDdJ, async (re
   if (parsed.p1_points_subis == null && parsed.p2_points != null) parsed.p1_points_subis = parsed.p2_points;
   if (parsed.p2_points_subis == null && parsed.p1_points != null) parsed.p2_points_subis = parsed.p1_points;
 
+  // V 2.0.828 — Server-side max validation against the current Distance.
+  // Distance is editable up until the DdJ starts, so we re-resolve it on
+  // every save (phase=barrage) instead of trusting any cached value.
+  try {
+    const { isQuillesMode, getBracketConfig, resolveDistance } = require('../utils/quilles-helpers');
+    const t = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id, mode, tournament_format, tournament_type, tour_number,
+                distance_matrix_id, fixed_distance, nb_tables, organization_id
+           FROM tournoi_ext WHERE tournoi_id = $1
+            AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId], (e, r) => e ? reject(e) : resolve(r)
+      );
+    });
+    if (t && isQuillesMode(t.mode)) {
+      const totalPlayers = await new Promise((resolve, reject) => {
+        db.get(`SELECT COUNT(*)::int AS n FROM convocation_poules WHERE tournoi_id = $1`,
+          [tournoiId], (e, r) => e ? reject(e) : resolve(r?.n || 0));
+      });
+      const cfg = await getBracketConfig(totalPlayers, { db });
+      const resolved = await resolveDistance(t, cfg.nb_poules, { db, phase: 'barrage' });
+      const maxDist = resolved && resolved.distance;
+      if (maxDist) {
+        for (const k of ['p1_points', 'p2_points']) {
+          if (parsed[k] != null && parsed[k] > maxDist) {
+            return res.status(400).json({
+              error: `${k} = ${parsed[k]} dépasse la distance autorisée (${maxDist} pts)`
+            });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Non-fatal: if distance cannot be resolved, fall through. Client-side
+    // check + the column type still bound the value.
+    console.warn('[barrage PUT] distance validation skipped:', e.message);
+  }
+
   try {
     // Verify tournament + ensure match exists
     const match = await new Promise((resolve, reject) => {
@@ -2832,20 +2870,25 @@ router.put('/competitions/:id/barrage', authenticateToken, requireDdJ, async (re
 
     await new Promise((resolve, reject) => {
       db.run(
+        // V 2.0.828 — Explicit ::int / ::text casts on every parameter to
+        // avoid Postgres "could not determine data type of parameter $N"
+        // when nullable values are passed (CLAUDE.md cast rule). $2 was
+        // also referenced inside CASE WHEN $2 IS NOT NULL — without a
+        // cast Postgres failed to infer the type and returned a 500.
         `UPDATE ddj_barrage_matches SET
-           table_number = COALESCE($1, table_number),
-           p1_points = $2,
-           p1_points_subis = $3,
-           p2_points = $4,
-           p2_points_subis = $5,
-           referee_name = COALESCE($6, referee_name),
-           referee_licence = COALESCE($7, referee_licence),
+           table_number = COALESCE($1::int, table_number),
+           p1_points = $2::int,
+           p1_points_subis = $3::int,
+           p2_points = $4::int,
+           p2_points_subis = $5::int,
+           referee_name = COALESCE($6::text, referee_name),
+           referee_licence = COALESCE($7::text, referee_licence),
            entered_at = CURRENT_TIMESTAMP,
-           entered_by = $8,
+           entered_by = $8::int,
            started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
-           finished_at = CASE WHEN $2 IS NOT NULL AND $4 IS NOT NULL
+           finished_at = CASE WHEN $2::int IS NOT NULL AND $4::int IS NOT NULL
                               THEN CURRENT_TIMESTAMP ELSE finished_at END
-         WHERE tournoi_id = $9 AND match_number = $10`,
+         WHERE tournoi_id = $9::int AND match_number = $10::int`,
         [tableNumber, parsed.p1_points, parsed.p1_points_subis,
          parsed.p2_points, parsed.p2_points_subis,
          refereeName, refereeLicence, req.user.userId || null,
