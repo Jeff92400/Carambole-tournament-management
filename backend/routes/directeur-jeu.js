@@ -2602,44 +2602,76 @@ async function loadBracketQuilles(db, orgId, tournoiId, pouleCtx) {
   });
 
   if (lbifCfg.has_barrage) {
-    // Standard with-barrage path
-    for (const e of barrageCtx.exempts || []) qualifiers.push(mkQ('exempt', e));
+    // V 2.0.834 — Historically-grounded composition. We DERIVE exempts and
+    // barragistes from the saved barrage matches (source of truth: who
+    // actually played a barrage match IS a barragiste), instead of trusting
+    // the current rerank. This is robust to any change in the rerank
+    // algorithm between barrage setup and bracket build (e.g. V 2.0.832
+    // making the tie-break deterministic shifted which players landed in
+    // each bucket; the originally-recorded barrage roster takes precedence).
 
-    // V 2.0.833 — Resilient winner lookup. The original implementation only
-    // searched barrageCtx.barragistes, which broke when the serpentin rerank
-    // changed (e.g. V 2.0.832 made the tie-break deterministic — players
-    // who used to be "barragiste" became "exempt" or vice versa, so the
-    // licence on a saved barrage match no longer matched anyone in the
-    // current barragistes list and the winner was silently dropped).
-    // Now we fall back through all known sources: barragistes → exempts →
-    // convocation_poules (raw player_name/club for whoever played the
-    // barrage match, regardless of how the rerank classifies them today).
-    const findPlayer = async (normLic) => {
-      const inB = (barrageCtx.barragistes || []).find(b =>
-        String(b.licence || '').replace(/\s+/g, '') === normLic);
-      if (inB) return inB;
-      const inE = (barrageCtx.exempts || []).find(b =>
-        String(b.licence || '').replace(/\s+/g, '') === normLic);
-      if (inE) return inE;
-      // Last resort: pull name/club straight from convocation_poules.
-      return await new Promise((resolve) => {
+    // 1. All players who qualified from poules (top N per poule)
+    const allPouleQualifiers = [];
+    for (const poule of pouleCtx.poules || []) {
+      const top = (poule.classement || []).slice(0, lbifCfg.qualified_per_poule);
+      for (const c of top) {
+        allPouleQualifiers.push({
+          licence: c.licence,
+          player_name: c.player_name,
+          club: c.club,
+          match_points: c.match_points,
+          points_scored: c.points_scored || c.points || 0,
+          poule_number: poule.number
+        });
+      }
+    }
+    const normLic = (s) => String(s || '').replace(/\s+/g, '');
+
+    // 2. Licences of every player who actually played a saved barrage match
+    const barragePlayed = new Set();
+    for (const m of barrageCtx.matches || []) {
+      if (m.p1_licence) barragePlayed.add(normLic(m.p1_licence));
+      if (m.p2_licence) barragePlayed.add(normLic(m.p2_licence));
+    }
+
+    // 3. Helper: resolve any licence to a player object (poule classement
+    //    first, then convocation_poules fallback for safety).
+    const resolveByLicence = async (lic) => {
+      const norm = normLic(lic);
+      const inPoule = allPouleQualifiers.find(p => normLic(p.licence) === norm);
+      if (inPoule) return inPoule;
+      const row = await new Promise((resolve) => {
         db.get(
           `SELECT licence, player_name, club, poule_number
              FROM convocation_poules
             WHERE tournoi_id = $1 AND REPLACE(licence, ' ', '') = $2
             LIMIT 1`,
-          [tournoiId, normLic],
-          (err, r) => resolve(err ? null : (r || { licence: normLic, player_name: 'Joueur', club: null, poule_number: null }))
+          [tournoiId, norm], (err, r) => resolve(err ? null : r)
         );
       });
+      return row || { licence: norm, player_name: 'Joueur', club: null, poule_number: null };
     };
 
+    // 4. Exempts = poule qualifiers who DIDN'T play barrage. Sorted by the
+    //    current serpentin rerank (so display order is consistent with the
+    //    barrage page).
+    if (barragePlayed.size > 0) {
+      const exemptCandidates = allPouleQualifiers.filter(p => !barragePlayed.has(normLic(p.licence)));
+      // Use the same rerank to order them (deterministic since V 2.0.832).
+      const rerankedExempts = computeReclassementSerpentin(exemptCandidates);
+      for (const e of rerankedExempts) qualifiers.push(mkQ('exempt', e));
+    } else {
+      // No barrage played yet — fall back to the rerank's current exempts.
+      for (const e of barrageCtx.exempts || []) qualifiers.push(mkQ('exempt', e));
+    }
+
+    // 5. Barrage winners (in match order) — resilient lookup across all
+    //    poule qualifiers + convocation_poules fallback.
     for (const m of barrageCtx.matches || []) {
       const played = m.p1_points != null && m.p2_points != null;
       if (!played) continue;
       const winnerLic = m.p1_points > m.p2_points ? m.p1_licence : m.p2_licence;
-      const normW = String(winnerLic).replace(/\s+/g, '');
-      const winner = await findPlayer(normW);
+      const winner = await resolveByLicence(winnerLic);
       if (winner) qualifiers.push(mkQ('barrage_winner', winner));
     }
     for (const dq of barrageCtx.direct_qualifs || []) qualifiers.push(mkQ('direct', dq));
@@ -3036,12 +3068,6 @@ async function loadBarrage(db, orgId, tournoiId) {
     }
   }
 
-  // 6. Reclassement serpentin then split: top nb_exempts → exempts, rest → barragistes
-  const reranked = computeReclassementSerpentin(qualifiedFromPoules);
-  const exempts = reranked.slice(0, lbifCfg.nb_exempts_barrage);
-  const barragistes = reranked.slice(lbifCfg.nb_exempts_barrage,
-    lbifCfg.nb_exempts_barrage + lbifCfg.nb_barragistes);
-
   // 7. Load direct qualifs (out-of-poule)
   const direct_qualifs = await new Promise((resolve, reject) => {
     db.all(
@@ -3055,7 +3081,8 @@ async function loadBarrage(db, orgId, tournoiId) {
     );
   });
 
-  // 8. Load saved barrage matches
+  // 8. Load saved barrage matches (loaded BEFORE the exempts/barragistes
+  // split so the split can be historically grounded — see step 6).
   const savedMatches = await new Promise((resolve, reject) => {
     db.all(
       `SELECT id, match_number, table_number, p1_licence, p2_licence,
@@ -3069,6 +3096,35 @@ async function loadBarrage(db, orgId, tournoiId) {
       (err, rs) => err ? reject(err) : resolve(rs || [])
     );
   });
+
+  // 6. Split into exempts vs. barragistes.
+  // V 2.0.834 — If barrage matches already exist, DERIVE the split from
+  // them (anyone who appears in a saved match IS a barragiste, anyone who
+  // qualified from poules but is NOT in a saved match is an exempt). This
+  // is robust to any rerank algorithm change that happens between barrage
+  // setup and bracket build (e.g. V 2.0.832 making the tie-break
+  // deterministic shifted which players landed in each bucket — without
+  // this fix the displayed exempts list disagreed with the saved matches).
+  // If no barrage matches yet, fall back to the current rerank's split.
+  let exempts, barragistes;
+  const _normLic = (s) => String(s || '').replace(/\s+/g, '');
+  if (savedMatches.length > 0) {
+    const barragePlayedSet = new Set();
+    for (const m of savedMatches) {
+      if (m.p1_licence) barragePlayedSet.add(_normLic(m.p1_licence));
+      if (m.p2_licence) barragePlayedSet.add(_normLic(m.p2_licence));
+    }
+    const exemptCandidates = qualifiedFromPoules.filter(p => !barragePlayedSet.has(_normLic(p.licence)));
+    const barragistesCandidates = qualifiedFromPoules.filter(p => barragePlayedSet.has(_normLic(p.licence)));
+    // Keep the same rerank for display ordering within each bucket.
+    exempts = computeReclassementSerpentin(exemptCandidates);
+    barragistes = computeReclassementSerpentin(barragistesCandidates);
+  } else {
+    const reranked = computeReclassementSerpentin(qualifiedFromPoules);
+    exempts = reranked.slice(0, lbifCfg.nb_exempts_barrage);
+    barragistes = reranked.slice(lbifCfg.nb_exempts_barrage,
+      lbifCfg.nb_exempts_barrage + lbifCfg.nb_barragistes);
+  }
 
   // 9. Resolve distance for barrage phase
   let distance = null;
