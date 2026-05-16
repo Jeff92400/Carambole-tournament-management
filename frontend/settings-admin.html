@@ -7938,6 +7938,15 @@
           </div>
         </div>
 
+        <!-- V 2.0.817 — Phase tabs (Phase 1.2) -->
+        <div style="margin-bottom: 0; padding: 8px 12px 0 12px; background: linear-gradient(180deg, #fff8e1 0%, transparent 100%); border-radius: 6px 6px 0 0;">
+          <div style="font-size: 11px; color: #8b0000; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">
+            🎯 Phase active (LBIF) :
+          </div>
+          <div id="mxPhaseTabs" style="display: flex; flex-wrap: wrap; gap: 2px;"></div>
+          <div id="mxPhaseHint" style="font-size: 11px; color: #666; padding: 6px 0 8px 0; font-style: italic;"></div>
+        </div>
+
         <!-- Quick-fill -->
         <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
           <span style="font-size: 12px; color: #666; font-weight: 600;">Remplissage rapide :</span>
@@ -7955,7 +7964,7 @@
           </table>
         </div>
         <p style="margin: 10px 0 0; font-size: 11px; color: #888; font-style: italic;">
-          Chaque cellule = distance de jeu (points pour gagner un match) pour cette combinaison (tables, poules). Laisser vide pour ne pas définir cette combinaison.
+          Chaque cellule = distance de jeu (points pour gagner un match) pour cette combinaison (tables, poules). En onglets non-"Par défaut", laisser vide pour hériter de la valeur par défaut.
         </p>
       </div>
       <div class="bareme-modal-footer">
@@ -7967,8 +7976,24 @@
 
   <script>
     // V 2.0.775 — Matrix editor for 5Q distance matrices (Sprint 2 A3)
+    // V 2.0.817 — Sprint 2 LBIF Phase 1.2: phase-aware editor
     let _mxEditingId = null;          // null = creating, otherwise editing
     let _mxGameMode5QId = null;        // game_modes.id for '5Q', loaded lazily
+
+    // V 2.0.817 — Phase state. matrixData mirrors the JSONB structure stored in DB:
+    //   { [tables]: { [poules]: int | { default, qualif?, barrage?, eighth?, quarter?, semi?, final? } } }
+    // activePhase = currently displayed phase ('default' or one of the LBIF phases).
+    let _mxState = { matrixData: {}, activePhase: 'default' };
+
+    const _MX_PHASES = [
+      { code: 'default', label: 'Par défaut',    color: '#1F4788', tip: "Valeur de référence. Utilisée si la phase active n'a pas de valeur spécifique pour la cellule." },
+      { code: 'qualif',  label: 'Qualification', color: '#8b4513', tip: "Distance des matchs de poule (qualification)." },
+      { code: 'barrage', label: 'Barrage',       color: '#d97706', tip: "Distance des matchs de barrage (entre poules et tableau final)." },
+      { code: 'eighth',  label: '1/8 finale',    color: '#0284c7', tip: "Distance des 1/8 de finale." },
+      { code: 'quarter', label: '1/4 finale',    color: '#0d9488', tip: "Distance des 1/4 de finale." },
+      { code: 'semi',    label: '1/2 finale',    color: '#7c3aed', tip: "Distance des 1/2 finales." },
+      { code: 'final',   label: 'Finale',        color: '#c8102e', tip: "Distance de la finale (et petite finale)." }
+    ];
 
     async function _mxResolve5QId() {
       if (_mxGameMode5QId) return _mxGameMode5QId;
@@ -7995,6 +8020,8 @@
     async function openMatrixEditor(matrixId) {
       _mxClearError();
       _mxEditingId = matrixId || null;
+      // V 2.0.817 — Reset phase state
+      _mxState = { matrixData: {}, activePhase: 'default' };
       document.getElementById('matrixEditorTitle').textContent =
         matrixId ? 'Éditer la matrice de distance' : 'Nouvelle matrice de distance 5Q';
 
@@ -8009,7 +8036,6 @@
       document.getElementById('mxPoulesMax').value = 15;
 
       // Load existing data if editing
-      let existingData = null;
       if (matrixId) {
         try {
           const resp = await fetch(`${API_URL}/settings/distance-matrices`, {
@@ -8022,15 +8048,17 @@
             document.getElementById('mxVersion').value = m.version || '';
             document.getElementById('mxActiveFrom').value = m.active_from ? m.active_from.split('T')[0] : '';
             document.getElementById('mxActiveTo').value = m.active_to ? m.active_to.split('T')[0] : '';
-            existingData = m.matrix_data || {};
+            // V 2.0.817 — Deep-clone into state. Supports both legacy flat (int)
+            // and new phase-aware (object) cell formats.
+            _mxState.matrixData = m.matrix_data ? JSON.parse(JSON.stringify(m.matrix_data)) : {};
             // Auto-compute dimensions from data
-            const tables = Object.keys(existingData).map(Number).filter(n => !isNaN(n));
+            const tables = Object.keys(_mxState.matrixData).map(Number).filter(n => !isNaN(n));
             if (tables.length) {
               document.getElementById('mxTablesMin').value = Math.min(...tables);
               document.getElementById('mxTablesMax').value = Math.max(...tables);
               const poulesAll = [];
               for (const t of tables) {
-                const row = existingData[t];
+                const row = _mxState.matrixData[t];
                 if (row && typeof row === 'object') {
                   Object.keys(row).map(Number).filter(n => !isNaN(n)).forEach(p => poulesAll.push(p));
                 }
@@ -8046,8 +8074,108 @@
         }
       }
 
-      renderMatrixGrid(existingData);
+      _mxRenderPhaseTabs();
+      renderMatrixGrid();
       document.getElementById('matrixEditorModal').style.display = 'flex';
+    }
+
+    // V 2.0.817 — Phase tab management
+    function _mxRenderPhaseTabs() {
+      const html = _MX_PHASES.map(ph => {
+        const isActive = ph.code === _mxState.activePhase;
+        const bg = isActive ? ph.color : 'white';
+        const color = isActive ? 'white' : '#444';
+        return `<button type="button" onclick="_mxSwitchPhase('${ph.code}')"
+          style="padding: 6px 12px; border: 1px solid ${ph.color}; background: ${bg}; color: ${color}; cursor: pointer; font-weight: ${isActive ? '700' : '500'}; font-size: 11px; border-radius: 4px 4px 0 0; transition: all 0.15s;"
+          title="${ph.tip}">${ph.label}</button>`;
+      }).join('');
+      document.getElementById('mxPhaseTabs').innerHTML = html;
+      const active = _MX_PHASES.find(p => p.code === _mxState.activePhase);
+      if (active) document.getElementById('mxPhaseHint').textContent = active.tip;
+    }
+
+    function _mxSwitchPhase(phase) {
+      // Save current grid into state for the previous phase, then switch.
+      _mxCollectCurrentGridIntoState();
+      _mxState.activePhase = phase;
+      _mxRenderPhaseTabs();
+      renderMatrixGrid();
+    }
+
+    // V 2.0.817 — Cell read/write helpers respecting the phase structure.
+    function _mxGetCellValue(t, p, phase) {
+      const cell = _mxState.matrixData?.[t]?.[p];
+      if (cell == null) return '';
+      if (typeof cell === 'number') {
+        // Flat int — applies to all phases (legacy format)
+        return cell;
+      }
+      if (typeof cell === 'object' && cell[phase] != null) {
+        return cell[phase];
+      }
+      return '';
+    }
+
+    function _mxGetCellPlaceholder(t, p, phase) {
+      // For non-default phases, show the default value as a placeholder hint
+      // (greyed out) so the admin sees what would apply if they leave it empty.
+      if (phase === 'default') return '';
+      const cell = _mxState.matrixData?.[t]?.[p];
+      if (cell == null) return '';
+      if (typeof cell === 'number') return String(cell);  // flat int = default for all phases
+      if (typeof cell === 'object' && cell.default != null) return String(cell.default);
+      return '';
+    }
+
+    function _mxSetCellValue(t, p, phase, value) {
+      const numVal = (value === '' || value == null) ? null : parseInt(value, 10);
+
+      if (numVal == null || !Number.isFinite(numVal) || numVal <= 0) {
+        // Removal of value
+        if (!_mxState.matrixData[t]) return;
+        const existing = _mxState.matrixData[t][p];
+        if (existing == null) return;
+        if (typeof existing === 'object') {
+          delete existing[phase];
+          if (Object.keys(existing).length === 0) {
+            delete _mxState.matrixData[t][p];
+            if (Object.keys(_mxState.matrixData[t]).length === 0) delete _mxState.matrixData[t];
+          }
+        } else if (phase === 'default') {
+          // Removing the default of a flat int → delete cell
+          delete _mxState.matrixData[t][p];
+          if (Object.keys(_mxState.matrixData[t]).length === 0) delete _mxState.matrixData[t];
+        }
+        return;
+      }
+
+      if (!_mxState.matrixData[t]) _mxState.matrixData[t] = {};
+      const existing = _mxState.matrixData[t][p];
+
+      if (existing == null || typeof existing === 'number') {
+        if (phase === 'default') {
+          // Stay flat int
+          _mxState.matrixData[t][p] = numVal;
+        } else {
+          // Need to convert to object. Preserve the existing int as the default
+          // (or set the new value as default too if no prior default).
+          _mxState.matrixData[t][p] = {
+            default: (typeof existing === 'number' ? existing : numVal),
+            [phase]: numVal
+          };
+        }
+      } else if (typeof existing === 'object') {
+        existing[phase] = numVal;
+      }
+    }
+
+    function _mxCollectCurrentGridIntoState() {
+      const inputs = document.querySelectorAll('#mxGrid input[type="number"]');
+      inputs.forEach(inp => {
+        const t = inp.dataset.table;
+        const p = inp.dataset.poules;
+        _mxSetCellValue(t, p, _mxState.activePhase, inp.value.trim());
+      });
     }
 
     function closeMatrixEditor() {
@@ -8071,8 +8199,14 @@
       }
       _mxClearError();
 
-      // Collect existing values from current grid (preserve when regenerating)
-      const current = prefillData || _mxCollectGrid();
+      // V 2.0.817 — Source de vérité = _mxState.matrixData, lecture par phase.
+      // Si "Régénérer la grille" est cliqué après édition partielle, on capture
+      // d'abord les valeurs courantes du DOM dans le state avant le re-render.
+      if (prefillData) {
+        // (legacy code-path appelait avec prefillData lors d'un open initial — pris en charge en amont via openMatrixEditor)
+      } else if (document.querySelectorAll('#mxGrid input[type="number"]').length > 0) {
+        _mxCollectCurrentGridIntoState();
+      }
 
       const grid = document.getElementById('mxGrid');
       const colSpan = (pMax - pMin + 1);
@@ -8101,12 +8235,17 @@
         html += `<th style="padding: 8px 6px; background: #fff8e1; min-width: 60px; text-align: center; font-weight: 700; color: #8b0000; border-bottom: 2px solid #c8102e; font-size: 14px;">${p}</th>`;
       }
       html += '</tr></thead><tbody>';
+      // V 2.0.817 — Read cell values from _mxState for the active phase.
+      // Non-default phase: empty cells show the default as placeholder (greyed).
+      const phase = _mxState.activePhase;
       for (let t = tMin; t <= tMax; t++) {
         html += `<tr><th style="padding: 8px; background: #fff8e1; position: sticky; left: 0; z-index: 1; border-right: 2px solid #c8102e; text-align: center; font-weight: 700; color: #8b0000; font-size: 14px;">${t}</th>`;
         for (let p = pMin; p <= pMax; p++) {
-          const val = (current[t] && current[t][p] != null) ? current[t][p] : '';
+          const val = _mxGetCellValue(t, p, phase);
+          const placeholder = _mxGetCellPlaceholder(t, p, phase);
+          const placeholderAttr = placeholder ? ` placeholder="${placeholder}"` : '';
           html += `<td style="padding: 2px; border: 1px solid #eee;">
-            <input type="number" data-table="${t}" data-poules="${p}" value="${val}" min="10" max="500" step="10"
+            <input type="number" data-table="${t}" data-poules="${p}" value="${val}"${placeholderAttr} min="10" max="500" step="10"
               style="width: 100%; padding: 6px 4px; border: 1px solid transparent; border-radius: 3px; text-align: center; font-size: 13px; background: transparent;"
               onfocus="this.style.borderColor='#c8102e'; this.style.background='#fff8e1';"
               onblur="this.style.borderColor='transparent'; this.style.background='transparent';">
@@ -8118,27 +8257,39 @@
       grid.innerHTML = html;
     }
 
+    // V 2.0.817 — Final collection for save: capture current grid → state → simplify.
+    // Simplification: cells whose object has only { default: X } collapse back to flat int.
     function _mxCollectGrid() {
-      const data = {};
-      const inputs = document.querySelectorAll('#mxGrid input[type="number"]');
-      inputs.forEach(inp => {
-        const t = inp.dataset.table;
-        const p = inp.dataset.poules;
-        const v = inp.value.trim();
-        if (v !== '') {
-          const n = parseInt(v, 10);
-          if (!isNaN(n) && n > 0) {
-            if (!data[t]) data[t] = {};
-            data[t][p] = n;
+      _mxCollectCurrentGridIntoState();
+      const cleaned = {};
+      for (const t of Object.keys(_mxState.matrixData)) {
+        for (const p of Object.keys(_mxState.matrixData[t])) {
+          const cell = _mxState.matrixData[t][p];
+          if (typeof cell === 'number' && cell > 0) {
+            if (!cleaned[t]) cleaned[t] = {};
+            cleaned[t][p] = cell;
+          } else if (typeof cell === 'object' && cell !== null) {
+            const keys = Object.keys(cell).filter(k => Number.isFinite(cell[k]) && cell[k] > 0);
+            if (keys.length === 1 && keys[0] === 'default') {
+              if (!cleaned[t]) cleaned[t] = {};
+              cleaned[t][p] = cell.default;
+            } else if (keys.length > 0) {
+              if (!cleaned[t]) cleaned[t] = {};
+              cleaned[t][p] = {};
+              keys.forEach(k => { cleaned[t][p][k] = cell[k]; });
+            }
           }
         }
-      });
-      return data;
+      }
+      return cleaned;
     }
 
+    // Quick-fill : remplit la phase active. Le state se met à jour au prochain blur,
+    // mais on force aussi une capture pour cohérence immédiate.
     function fillMatrix(value) {
       const inputs = document.querySelectorAll('#mxGrid input[type="number"]');
       inputs.forEach(inp => { inp.value = value; });
+      _mxCollectCurrentGridIntoState();
     }
 
     // LBIF 5Q reference matrix (typical values — admin should adjust if règlement evolves)
@@ -8154,6 +8305,7 @@
         else dist = 80;
         inp.value = dist;
       });
+      _mxCollectCurrentGridIntoState();
     }
 
     async function saveMatrix() {
