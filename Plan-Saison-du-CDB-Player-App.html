@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Plan — Section "Saison du CDB" (Player App)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 980px; margin: 2em auto; padding: 0 1.5em; color: #1a1a1a; line-height: 1.55; }
+  h1 { color: #1F4788; border-bottom: 3px solid #1F4788; padding-bottom: 0.3em; }
+  h2 { color: #1F4788; margin-top: 2em; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2em; }
+  h3 { color: #333; margin-top: 1.5em; }
+  .meta { background: #f5f7fa; border-left: 4px solid #1F4788; padding: 0.8em 1.2em; margin: 1em 0 2em; font-size: 0.95em; }
+  .meta strong { display: inline-block; min-width: 130px; }
+  .status { display: inline-block; padding: 0.15em 0.6em; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
+  .status-todo { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.94em; }
+  th, td { border: 1px solid #ddd; padding: 0.5em 0.75em; text-align: left; vertical-align: top; }
+  th { background: #1F4788; color: white; }
+  tr:nth-child(even) td { background: #f8f9fa; }
+  code { background: #f3f3f3; padding: 0.1em 0.4em; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #2d2d2d; color: #f8f8f2; padding: 1em; border-radius: 6px; overflow-x: auto; font-size: 0.88em; }
+  .callout { background: #e7f3ff; border-left: 4px solid #1F4788; padding: 0.8em 1.2em; margin: 1em 0; }
+  .warn { background: #fff5e6; border-left: 4px solid #ffc107; padding: 0.8em 1.2em; margin: 1em 0; }
+  .ok { background: #e9f7ef; border-left: 4px solid #28a745; padding: 0.8em 1.2em; margin: 1em 0; }
+  .card-mockup { display: flex; gap: 1em; margin: 1.5em 0; flex-wrap: wrap; }
+  .card { flex: 1; min-width: 200px; border: 2px solid #1F4788; border-radius: 8px; padding: 1.5em 1em; text-align: center; background: white; }
+  .card .icon { font-size: 2.5em; }
+  .card .title { color: #1F4788; font-weight: bold; font-size: 1.1em; margin: 0.3em 0; }
+  .card .subtitle { color: #555; font-size: 0.85em; }
+  ul li { margin: 0.3em 0; }
+  .effort-total { background: #1F4788; color: white; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Section « Saison du CDB » — Player App</h1>
+<p style="font-size: 1.1em; color: #555;">Regrouper sous une seule icône les trois vues <strong>au niveau du CDB</strong> (et non individuelles) : compétitions à venir + classement compétitions + classement catégories.</p>
+
+<div class="meta">
+  <p><strong>Statut :</strong> <span class="status status-todo">à démarrer</span></p>
+  <p><strong>Repo concerné :</strong> <code>cdbhs-player-app</code> (PAS le repo de gestion)</p>
+  <p><strong>Date de rédaction :</strong> 15 mai 2026</p>
+  <p><strong>Type :</strong> évolution UX / réorganisation IA (information architecture)</p>
+  <p><strong>Effort estimé :</strong> ~1 à 1,5 jour</p>
+</div>
+
+<h2>1. Contexte</h2>
+
+<p>Suite à la récente réorganisation de la home de la Player App (intégration de la « hybrid news feature »), la <strong>liste des compétitions à venir</strong> — auparavant accessible depuis la page Calendrier — n'est plus visible aux joueurs.</p>
+
+<p>Par ailleurs, deux cartes existent dans la section <strong>« Profil &amp; FAQ »</strong> qui n'y ont jamais eu leur place — elles y avaient été placées par manque d'espace ailleurs :</p>
+<ul>
+  <li><strong>Classement Compétitions</strong> (vue CDB, pas individuelle)</li>
+  <li><strong>Classement Catégories</strong> (vue CDB, pas individuelle)</li>
+</ul>
+
+<p>Avec la réduction du nombre d'icônes sur la home, on dispose de l'espace pour créer une nouvelle section dédiée qui rassemble ces trois éléments cohérents (tous au niveau du CDB).</p>
+
+<h2>2. Décision validée</h2>
+
+<table>
+  <tr><th>Élément</th><th>Décision</th></tr>
+  <tr><td>Nom de la section</td><td><strong>Saison du CDB</strong></td></tr>
+  <tr><td>Icône (option A — recommandée)</td><td>Logo dynamique du CDB (déjà chargé via <code>organization_settings.logo</code>)</td></tr>
+  <tr><td>Icône (option B — fallback)</td><td>🏟️ (stade — emoji universel)</td></tr>
+  <tr><td>Position dans la home</td><td>À côté des autres icônes principales (rang à confirmer en intégration)</td></tr>
+  <tr><td>Cartes regroupées</td><td>3 (voir §4)</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Recommandation icône :</strong> utiliser le <strong>logo du CDB</strong> (option A). Le label dit « CDB » → l'icône montre le CDB → association immédiate, sans ambiguïté. Le logo est déjà disponible par organisation (pattern dual storage <code>frontend/images/clubs/{orgSlug}/</code> + <code>clubs.logo_data</code>), donc multi-CDB sans effort. Le stade 🏟️ reste un fallback acceptable si le rendu logo dans une icône ronde n'est pas satisfaisant visuellement.
+</div>
+
+<h2>3. Nouvelle section « Saison du CDB »</h2>
+
+<p>Au clic sur l'icône, le joueur arrive sur une page qui reproduit le pattern visuel existant (cartes cliquables).</p>
+
+<div class="card-mockup">
+  <div class="card">
+    <div class="icon">📅</div>
+    <div class="title">Compétitions à venir</div>
+    <div class="subtitle">(N prochaines)</div>
+  </div>
+  <div class="card">
+    <div class="icon">🏆</div>
+    <div class="title">Classement<br>Compétitions</div>
+    <div class="subtitle">Saison en cours</div>
+  </div>
+  <div class="card">
+    <div class="icon">📊</div>
+    <div class="title">Classement<br>Catégories</div>
+    <div class="subtitle">Saison en cours</div>
+  </div>
+</div>
+
+<h3>Carte 1 — Compétitions à venir</h3>
+<ul>
+  <li>Récupère la liste qui était sur la page Calendrier (avant réorganisation).</li>
+  <li>Compteur dynamique en sous-titre : « (N prochaines) ».</li>
+  <li>Au clic : liste détaillée avec, pour chaque tournoi : date, lieu, mode, catégorie, et <strong>nombre d'inscrits cliquable</strong> (comportement préservé de l'ancienne page Calendrier — au clic, ouvre la liste des inscrits).</li>
+  <li>Filtre temporel : compétitions dont la date de début est ≥ aujourd'hui, triées chronologiquement.</li>
+</ul>
+
+<h3>Carte 2 — Classement Compétitions</h3>
+<ul>
+  <li>Déplacée depuis « Profil &amp; FAQ ». Aucun changement de comportement.</li>
+  <li>Sous-titre « Saison en cours » pour clarifier la portée temporelle.</li>
+</ul>
+
+<h3>Carte 3 — Classement Catégories</h3>
+<ul>
+  <li>Déplacée depuis « Profil &amp; FAQ ». Aucun changement de comportement.</li>
+  <li>Sous-titre identique.</li>
+</ul>
+
+<h2>4. Conséquences sur « Profil &amp; FAQ »</h2>
+
+<p>Le retrait des deux cartes de classement allège la section. À confirmer pendant l'implémentation : reste-t-il assez de contenu pour justifier le label combiné « Profil &amp; FAQ », ou peut-on simplifier ?</p>
+
+<ul>
+  <li><strong>Si la section reste suffisante</strong> (profil joueur + FAQ + autres éléments) : conserver le label actuel.</li>
+  <li><strong>Si trop maigre</strong> : envisager de renommer en « Profil » seulement, et déplacer la FAQ dans une icône d'aide dédiée (?) ou en pied de page.</li>
+</ul>
+
+<div class="warn">
+  <strong>À vérifier sur le terrain</strong> : faire un screenshot de « Profil &amp; FAQ » avant/après retrait des cartes pour juger visuellement.
+</div>
+
+<h2>5. Communication transitoire</h2>
+
+<p>Les joueurs qui cherchaient la liste des compétitions sur l'ancienne page Calendrier risquent d'être déstabilisés. Solution : un message transitoire à afficher pendant 2 à 3 semaines après la mise en production.</p>
+
+<h3>Options de canal</h3>
+
+<table>
+  <tr><th>Option</th><th>Avantages</th><th>Inconvénients</th></tr>
+  <tr>
+    <td>Annonce dans la <strong>hybrid news feature</strong> récemment livrée</td>
+    <td>Cohérent avec la feature, lue par tous les joueurs actifs</td>
+    <td>Disparaît si nouvelles annonces poussent celle-ci en bas</td>
+  </tr>
+  <tr>
+    <td><strong>Notification push</strong> à tous les joueurs avec l'app installée</td>
+    <td>Atteint immédiatement les 57+ joueurs PWA</td>
+    <td>Une seule diffusion, à oublier ensuite</td>
+  </tr>
+  <tr>
+    <td><strong>Bannière statique</strong> en haut de la home pendant 2-3 semaines</td>
+    <td>Persistante, visible à chaque visite</td>
+    <td>Polluante visuellement, code dédié à écrire puis à retirer</td>
+  </tr>
+</table>
+
+<p><strong>Recommandation :</strong> combiner <em>annonce news</em> (canal principal) + <em>notification push</em> (one-shot au lancement). Pas de bannière dédiée.</p>
+
+<p><strong>Texte suggéré (annonce + push) :</strong></p>
+
+<pre>Titre : 📅 La liste des compétitions a déménagé
+
+Vous trouvez désormais toutes les compétitions du CDB à venir dans
+la nouvelle section « Saison du CDB » 🏟️ (sur la page d'accueil),
+avec le nombre d'inscrits, ainsi que les classements compétitions
+et catégories.</pre>
+
+<h2>6. Implémentation (Player App)</h2>
+
+<p>Le travail est essentiellement frontend, avec quelques ajustements de routing. Aucun changement de schéma DB ni de modèle backend nécessaire — les trois contenus existent déjà.</p>
+
+<h3>Frontend</h3>
+<ul>
+  <li>Nouvelle page <code>saison-cdb.html</code> (ou route équivalente selon la convention Player App) avec les 3 cartes.</li>
+  <li>Ajout de l'icône sur la home (PWA), pointant vers la nouvelle page.</li>
+  <li>Logo CDB chargé dynamiquement depuis <code>organization_settings</code> (déjà disponible côté Player App via le pattern <code>?org=&lt;slug&gt;</code>).</li>
+  <li>Carte « Compétitions à venir » : restaurer le composant qui était sur l'ancien Calendrier (liste + click sur inscrits) — récupérer le code depuis l'historique git si la page a été supprimée, ou réécrire en s'inspirant.</li>
+  <li>Retrait des deux cartes de classement de la page « Profil &amp; FAQ ».</li>
+</ul>
+
+<h3>Backend (Player App)</h3>
+<ul>
+  <li>Aucun nouvel endpoint à créer — les trois contenus utilisent des endpoints existants (compétitions à venir, classement compétitions, classement catégories).</li>
+  <li>Vérifier que l'endpoint « compétitions à venir » filtre bien par organisation (multi-CDB) et exclut les tournois passés / annulés.</li>
+</ul>
+
+<h3>Documentation utilisateur</h3>
+<ul>
+  <li>Mettre à jour le guide utilisateur Player App (équivalent de <code>guide-utilisateur.html</code> côté gestion) pour décrire la nouvelle section.</li>
+  <li>Marquer dans le changelog / news la nouveauté.</li>
+</ul>
+
+<h2>7. Effort</h2>
+
+<table>
+  <tr><th>Tâche</th><th>Effort</th></tr>
+  <tr><td>Création page « Saison du CDB » avec les 3 cartes</td><td>0,3 j</td></tr>
+  <tr><td>Restauration de la liste « Compétitions à venir » + click sur inscrits</td><td>0,3 j</td></tr>
+  <tr><td>Ajout icône home + routing</td><td>0,1 j</td></tr>
+  <tr><td>Retrait des 2 cartes de « Profil &amp; FAQ »</td><td>0,1 j</td></tr>
+  <tr><td>Communication transitoire (annonce + push)</td><td>0,1 j</td></tr>
+  <tr><td>Tests cross-device (iOS PWA, Android, desktop)</td><td>0,3 j</td></tr>
+  <tr><td>Mise à jour guide utilisateur</td><td>0,2 j</td></tr>
+  <tr class="effort-total"><td>Total</td><td>~1,4 j</td></tr>
+</table>
+
+<h2>8. Questions ouvertes</h2>
+
+<ul>
+  <li><strong>Position de l'icône sur la home</strong> : à quel rang la placer ? À voir avec le rendu actuel après réduction du nombre d'icônes.</li>
+  <li><strong>Logo CDB ou stade emoji</strong> : décision finale après essai visuel — un logo en miniature peut être moins lisible qu'un emoji selon la résolution.</li>
+  <li><strong>Sort de la section « Profil &amp; FAQ »</strong> : à reconsidérer après retrait des deux cartes (cf. §4).</li>
+  <li><strong>Carte 1 — historique</strong> : la liste « Compétitions à venir » doit-elle aussi proposer une vue historique (passées), ou rester focalisée « à venir » ? Recommandation : rester focalisée « à venir » pour ne pas dupliquer ce qui existe ailleurs (résultats).</li>
+</ul>
+
+<hr>
+<p style="color: #888; font-size: 0.9em; text-align: center; margin-top: 3em;">
+Plan rédigé le 15 mai 2026 — à déplacer vers <code>OneDrive/.../Projet Tournois management FFB/Planification/</code>
+</p>
+
+</body>
+</html>
