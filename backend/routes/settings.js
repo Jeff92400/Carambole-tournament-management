@@ -2794,6 +2794,8 @@ router.get('/quilles/resolve-distance/:tournoiId', authenticateToken, async (req
   const orgId = req.user.organizationId || null;
   const tournoiId = parseInt(req.params.tournoiId, 10);
   const nbPoules = req.query.nb_poules ? parseInt(req.query.nb_poules, 10) : null;
+  // V 2.0.815 — D1: optional ?phase= param for phase-aware lookup.
+  const phase = req.query.phase || null;
 
   if (!Number.isFinite(tournoiId)) {
     return res.status(400).json({ error: 'tournoi_id invalide' });
@@ -2814,7 +2816,7 @@ router.get('/quilles/resolve-distance/:tournoiId', authenticateToken, async (req
     if (!row) return res.status(404).json({ error: 'Tournoi introuvable' });
 
     const { resolveDistance } = require('../utils/quilles-helpers');
-    const result = await resolveDistance(row, nbPoules, { db });
+    const result = await resolveDistance(row, nbPoules, { db, phase });
     res.json({
       tournoi_id: tournoiId,
       mode: row.mode,
@@ -2822,6 +2824,7 @@ router.get('/quilles/resolve-distance/:tournoiId', authenticateToken, async (req
       distance_matrix_id: row.distance_matrix_id,
       nb_tables: row.nb_tables,
       nb_poules: nbPoules,
+      requested_phase: phase,
       ...result
     });
   } catch (err) {

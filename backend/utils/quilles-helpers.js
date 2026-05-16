@@ -40,14 +40,26 @@ function isQuillesMode(mode) {
 /**
  * Resolves the playing distance for a Quilles tournament.
  *
+ * V 2.0.815 — Sprint 2 D1 (LBIF Phase 1): phase-aware matrix lookup.
+ * matrix_data[tables][poules] can now be either:
+ *   - an integer (legacy flat format) → same distance for all phases
+ *   - an object { default: int, qualif?: int, barrage?: int, eighth?: int,
+ *     quarter?: int, semi?: int, final?: int } → per-phase override + default
+ * The lookup tries opts.phase first, then 'default', then any numeric value
+ * found in the object (defensive fallback).
+ *
  * @param {object} tournament - tournoi_ext row, must include at least:
  *   { mode, fixed_distance, distance_matrix_id, nb_tables, organization_id }
  * @param {number|null} nbPoules - number of poules in the tournament.
  *   Required for 5Q matrix lookup; ignored for 9Q.
  * @param {object} opts
  * @param {object} opts.db - db-loader (required, async)
- * @returns {Promise<{distance: number|null, source: string, warning?: string}>}
- *   source ∈ 'fixed' | 'matrix' | 'org_default' | 'unresolved'
+ * @param {string} [opts.phase] - 'qualif' | 'barrage' | 'eighth' | 'quarter'
+ *   | 'semi' | 'final'. Used only when matrix_data cell is an object.
+ *   Defaults to 'default' (top-level fallback).
+ * @returns {Promise<{distance: number|null, source: string, warning?: string, phase?: string}>}
+ *   source ∈ 'fixed' | 'matrix' | 'matrix_phase' | 'matrix_default'
+ *         | 'org_default' | 'unresolved'
  */
 async function resolveDistance(tournament, nbPoules, opts = {}) {
   const db = opts.db || require('../db-loader');
@@ -115,15 +127,42 @@ async function resolveDistance(tournament, nbPoules, opts = {}) {
   const tablesKey = String(tournament.nb_tables);
   const poulesKey = String(nbPoules);
   const cell = data?.[tablesKey]?.[poulesKey];
-  if (!Number.isFinite(cell) || cell <= 0) {
-    return {
-      distance: null,
-      source: 'unresolved',
-      warning: `no cell for tables=${tablesKey} poules=${poulesKey}`
-    };
+
+  // V 2.0.815 — D1: phase-aware lookup.
+  // Case 1: cell is a positive integer (legacy flat format) → return as-is.
+  if (Number.isFinite(cell) && cell > 0) {
+    return { distance: cell, source: 'matrix' };
   }
 
-  return { distance: cell, source: 'matrix' };
+  // Case 2: cell is an object → look up by phase, then default, then any numeric.
+  if (cell && typeof cell === 'object') {
+    const phase = opts.phase;
+    // Validate phase against the known set so a typo can't silently swallow a config.
+    const KNOWN_PHASES = new Set(['qualif', 'barrage', 'eighth', 'quarter', 'semi', 'final']);
+    if (phase && KNOWN_PHASES.has(phase) && Number.isFinite(cell[phase]) && cell[phase] > 0) {
+      return { distance: cell[phase], source: 'matrix_phase', phase };
+    }
+    if (Number.isFinite(cell.default) && cell.default > 0) {
+      return { distance: cell.default, source: 'matrix_default', phase: phase || 'default' };
+    }
+    // Defensive fallback: take the first positive integer found in the object.
+    for (const k of Object.keys(cell)) {
+      if (Number.isFinite(cell[k]) && cell[k] > 0) {
+        return {
+          distance: cell[k],
+          source: 'matrix_fallback',
+          phase: k,
+          warning: `no '${phase || 'default'}' for tables=${tablesKey} poules=${poulesKey} — used '${k}' instead`
+        };
+      }
+    }
+  }
+
+  return {
+    distance: null,
+    source: 'unresolved',
+    warning: `no cell for tables=${tablesKey} poules=${poulesKey}${opts.phase ? ` phase=${opts.phase}` : ''}`
+  };
 }
 
 // ----------------------------------------------------------------------------
