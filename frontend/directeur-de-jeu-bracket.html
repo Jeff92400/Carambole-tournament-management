@@ -507,9 +507,11 @@
       document.getElementById('tournamentParams').textContent = 'Étape 4 : Tableau final';
 
       // V 2.0.692 — DdJ V3 : show parallelism hint when phase finale is ready
+      // V 2.0.829 — Quilles LBIF has no consolante (no matchs de classement),
+      // so the parallelism banner is irrelevant. Hide it entirely for Quilles.
       const v3hint = document.getElementById('v3ParallelHint');
       if (v3hint) {
-        v3hint.style.display = b.can_start ? 'block' : 'none';
+        v3hint.style.display = (b.can_start && !_isQ_bracket) ? 'block' : 'none';
         const link = document.getElementById('goToConsolanteBtn');
         if (link && !link._v3Wired) {
           link._v3Wired = true;
@@ -548,8 +550,8 @@
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu-matchs.html?compId=${compId}'">
             ← Retour aux matchs
           </button>
-          <button class="ddj-btn ddj-btn-primary" onclick="window.location.href='directeur-de-jeu-classement.html?compId=${compId}'">
-            Matchs de classement →
+          <button class="ddj-btn ddj-btn-primary" onclick="window.location.href='${_isQ_bracket ? 'directeur-de-jeu-recap.html' : 'directeur-de-jeu-classement.html'}?compId=${compId}'">
+            ${_isQ_bracket ? 'Récapitulatif →' : 'Matchs de classement →'}
           </button>
         </div>
       `;
