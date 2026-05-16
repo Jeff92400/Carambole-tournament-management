@@ -124,8 +124,15 @@ router.get('/:tournoi_id/feed', async (req, res) => {
     }
     let bracketCtx = null;
     let consolanteCtx = null;
+    let barrageCtx = null;
     try { bracketCtx = await directeurJeu.loadBracket(db, null, tournoiId); } catch (e) { console.error('[feed] loadBracket', e); }
     try { consolanteCtx = await directeurJeu.loadConsolante(db, null, tournoiId); } catch (e) { console.error('[feed] loadConsolante', e); }
+    // V 2.0.826 — Sprint 2 LBIF: load Barrage state so the TV (Quilles only)
+    // can show the 3-column layout Poules | Barrage | Phase finale.
+    // loadBarrage returns { applicable: false } for non-Quilles tournaments
+    // (and for the LBIF exceptions N ∈ {12,23,24} where has_barrage = false),
+    // in which case the frontend silently keeps the 2-col layout.
+    try { barrageCtx = await directeurJeu.loadBarrage(db, null, tournoiId); } catch (e) { console.error('[feed] loadBarrage', e); }
 
     // 4. Collect every licence appearing anywhere → ONE players query →
     //    sanitized name map ("First L."). Names come back as "Last First"
@@ -145,6 +152,16 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       for (const ph of consolanteCtx.phases) {
         if (ph.p1 && ph.p1.licence) licenceSet.add(ph.p1.licence);
         if (ph.p2 && ph.p2.licence) licenceSet.add(ph.p2.licence);
+      }
+    }
+    // V 2.0.826 — barrage participants (exempts, barragistes, direct_qualifs, matches)
+    if (barrageCtx && barrageCtx.applicable) {
+      for (const p of (barrageCtx.exempts || [])) if (p.licence) licenceSet.add(p.licence);
+      for (const p of (barrageCtx.barragistes || [])) if (p.licence) licenceSet.add(p.licence);
+      for (const p of (barrageCtx.direct_qualifs || [])) if (p.licence) licenceSet.add(p.licence);
+      for (const m of (barrageCtx.matches || [])) {
+        if (m.p1_licence) licenceSet.add(m.p1_licence);
+        if (m.p2_licence) licenceSet.add(m.p2_licence);
       }
     }
     const licenceList = [...licenceSet];
@@ -263,6 +280,50 @@ router.get('/:tournoi_id/feed', async (req, res) => {
         }
       : { available: false, phases: [] };
 
+    // 7b. V 2.0.826 — Sanitized barrage payload (Quilles only).
+    //     Always returned so the frontend can decide whether to show the
+    //     3-col layout. For non-applicable cases (carambole or LBIF exception),
+    //     we return { applicable: false } and the TV falls back to 2 cols.
+    let barrageOut = { applicable: false };
+    if (barrageCtx && barrageCtx.applicable) {
+      const sanitizePlayer = (p) => ({
+        name: lookupName(p.licence),
+        club: lookupClub(p.licence),
+        poule_number: p.poule_number || null
+      });
+      const sanitizeBarrageMatch = (m) => ({
+        match_number: m.match_number,
+        table_number: m.table_number || null,
+        p1_name: lookupName(m.p1_licence),
+        p2_name: lookupName(m.p2_licence),
+        p1_points: m.p1_points,
+        p2_points: m.p2_points,
+        status: deriveStatus({
+          finished_at: m.finished_at,
+          started_at: m.started_at,
+          is_played: m.p1_points != null && m.p2_points != null
+        }),
+        started_at: m.started_at,
+        finished_at: m.finished_at
+      });
+      barrageOut = {
+        applicable: true,
+        has_barrage: !!(barrageCtx.lbif && barrageCtx.lbif.has_barrage),
+        can_start: !!barrageCtx.can_start,
+        started: !!barrageCtx.started,
+        all_done: !!barrageCtx.all_done,
+        nb_barragistes: barrageCtx.lbif ? barrageCtx.lbif.nb_barragistes : 0,
+        nb_exempts_barrage: barrageCtx.lbif ? barrageCtx.lbif.nb_exempts_barrage : 0,
+        exempts: (barrageCtx.exempts || []).map(sanitizePlayer),
+        barragistes: (barrageCtx.barragistes || []).map(sanitizePlayer),
+        direct_qualifs: (barrageCtx.direct_qualifs || []).map(p => ({
+          name: lookupName(p.licence),
+          club: lookupClub(p.licence)
+        })),
+        matches: (barrageCtx.matches || []).map(sanitizeBarrageMatch)
+      };
+    }
+
     // 8. Upcoming queue — next 3 pending poule matches across all poules,
     //    flat list with table_number so the footer can show e.g. "Table 7".
     const upcoming = [];
@@ -296,6 +357,13 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       total += 1;
       if (ph.status === 'finished') done += 1;
     }
+    // V 2.0.826 — count barrage matches in the progress bar (Quilles only)
+    if (barrageOut.applicable && barrageOut.has_barrage) {
+      for (const m of (barrageOut.matches || [])) {
+        total += 1;
+        if (m.status === 'finished') done += 1;
+      }
+    }
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;
 
     res.json({
@@ -317,6 +385,8 @@ router.get('/:tournoi_id/feed', async (req, res) => {
       poules: poulesOut,
       bracket: bracketOut,
       consolante: consolanteOut,
+      // V 2.0.826 — barrage state for Quilles TV layout (3 cols when applicable)
+      barrage: barrageOut,
       upcoming: upcomingTop,
       progress: { done, total, percent }
     });

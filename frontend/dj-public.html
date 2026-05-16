@@ -718,17 +718,37 @@
       $('t-main').style.gridTemplateColumns = '1fr 1fr';
       $('t-main').innerHTML = renderPouleSingle((data.poules || [])[0]);
     } else if (isQuillesTv) {
-      // Quilles: 2 columns (Poules | Phase finale), no consolante
-      $('t-main').style.gridTemplateColumns = '1.4fr 1.6fr';
-      $('t-main').innerHTML = `
-        <div class="col">
-          <div class="col-title">Poules</div>
-          <div class="col-body">${(data.poules || []).map(renderPoule).join('')}</div>
-        </div>
-        <div class="col">
-          <div class="col-title">Phase finale</div>
-          <div class="col-body">${renderBracket(data.bracket)}</div>
-        </div>`;
+      // V 2.0.826 — Quilles layout branches on barrage applicability:
+      //   has_barrage = true  → 3 cols : Poules | Barrage | Phase finale
+      //   has_barrage = false → 2 cols : Poules | Phase finale (LBIF exceptions 12/23/24)
+      const hasBarrage = data.barrage && data.barrage.applicable && data.barrage.has_barrage;
+      if (hasBarrage) {
+        $('t-main').style.gridTemplateColumns = '1.2fr 0.9fr 1.4fr';
+        $('t-main').innerHTML = `
+          <div class="col">
+            <div class="col-title">Poules</div>
+            <div class="col-body">${(data.poules || []).map(renderPoule).join('')}</div>
+          </div>
+          <div class="col">
+            <div class="col-title">Barrage</div>
+            <div class="col-body">${renderBarrage(data.barrage)}</div>
+          </div>
+          <div class="col">
+            <div class="col-title">Phase finale</div>
+            <div class="col-body">${renderBracket(data.bracket)}</div>
+          </div>`;
+      } else {
+        $('t-main').style.gridTemplateColumns = '1.4fr 1.6fr';
+        $('t-main').innerHTML = `
+          <div class="col">
+            <div class="col-title">Poules</div>
+            <div class="col-body">${(data.poules || []).map(renderPoule).join('')}</div>
+          </div>
+          <div class="col">
+            <div class="col-title">Phase finale</div>
+            <div class="col-body">${renderBracket(data.bracket)}</div>
+          </div>`;
+      }
     } else {
       $('t-main').style.gridTemplateColumns = ''; // reset to CSS default (1.3fr 1.7fr 1.2fr)
       $('t-main').innerHTML = `
@@ -951,6 +971,59 @@
     // exactly like the admin app. Falls back to the internal phase code
     // (QF1, SF1, …) only if the backend hasn't sent ffb_label.
     return `<div class="conso-list">${c.phases.map(ph => renderBmatch(ph, ph.ffb_label || ph.phase)).join('')}</div>`;
+  }
+
+  // ---- BARRAGE (V 2.0.826 — Quilles LBIF only) ----
+  // Renders the Barrage column on the TV when has_barrage = true.
+  // Layout: status banner → matchs barrage (1v8, 2v7, …) → exempts → qualifiés d'office.
+  function renderBarrage(b) {
+    if (!b || !b.applicable) {
+      return `<div class="bracket-empty">Pas de barrage prévu</div>`;
+    }
+    if (!b.can_start && (!b.matches || b.matches.length === 0)) {
+      return `<div class="bracket-empty">En attente de la fin des poules…</div>`;
+    }
+
+    // Matchs barrage (use the same renderBmatch() cards as the bracket for visual consistency)
+    const matchesHtml = (b.matches && b.matches.length > 0)
+      ? b.matches.map((m, i) => renderBmatch({
+          phase: `B${m.match_number}`,
+          p1_name: m.p1_name, p2_name: m.p2_name,
+          p1_poule: null, p2_poule: null,
+          table_number: m.table_number,
+          p1_points: m.p1_points, p2_points: m.p2_points,
+          status: m.status,
+          started_at: m.started_at, finished_at: m.finished_at
+        }, `Match ${m.match_number}`, { showMedals: false })).join('')
+      : `<div class="bracket-empty" style="padding:8px;">Barrage non démarré…</div>`;
+
+    // Exemptés (qualifiés directs sans barrage)
+    const exemptsHtml = (b.exempts && b.exempts.length > 0) ? `
+      <div class="poule" style="margin-top:10px;">
+        <div class="poule-head"><div class="pname">Exemptés (${b.exempts.length})</div></div>
+        <div class="classement">
+          ${b.exempts.map((p, i) => `
+            <div class="crow">
+              <span class="pos">${i + 1}.</span>
+              <span class="name">${escapeHtml(p.name)}${p.poule_number ? ' <span class="bp-poule">P' + p.poule_number + '</span>' : ''}</span>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    // Qualifiés d'office (out-of-poule)
+    const directHtml = (b.direct_qualifs && b.direct_qualifs.length > 0) ? `
+      <div class="poule" style="margin-top:10px;">
+        <div class="poule-head"><div class="pname">Qualifiés d'office (${b.direct_qualifs.length})</div></div>
+        <div class="classement">
+          ${b.direct_qualifs.map((p, i) => `
+            <div class="crow">
+              <span class="pos">${i + 1}.</span>
+              <span class="name">${escapeHtml(p.name)}</span>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    return matchesHtml + exemptsHtml + directHtml;
   }
 </script>
 </body>

@@ -5509,3 +5509,5 @@ module.exports = router;
 module.exports.loadPouleMatches = loadPouleMatches;
 module.exports.loadBracket = loadBracket;
 module.exports.loadConsolante = loadConsolante;
+// V 2.0.826 — exposed to dj-public feed so the TV can show barrage matches
+module.exports.loadBarrage = loadBarrage;
