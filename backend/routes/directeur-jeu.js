@@ -2509,6 +2509,351 @@ async function loadBracket(db, orgId, tournoiId) {
   };
 }
 
+// ============================================================================
+// V 2.0.820 — Sprint 2 LBIF Phase 4: PHASE DE BARRAGE (Quilles only)
+//
+// Per LBIF chap 1.1.3, après les poules les top-2 de chaque poule sont
+// reclassés (serpentin), puis :
+//   - les "exempts" (top nb_exempts_barrage du reclassement) sautent le
+//     barrage et vont direct au bracket
+//   - les "barragistes" (suivants nb_barragistes) jouent un round
+//     d'élimination directe
+//   - les vainqueurs du barrage rejoignent les exempts + direct qualifs
+//     dans le bracket
+//
+// Exceptions règlement : si N inscrits ∈ {12, 23, 24}, has_barrage=false
+// → la phase entière est skippée, tous les qualifiés des poules vont
+// direct au bracket.
+// ============================================================================
+
+/**
+ * Load barrage state for a tournament: matches scheduled (if any),
+ * the exempts list, the barragistes list, and a flag indicating whether
+ * the barrage is applicable / startable / done.
+ *
+ * @returns {object} { applicable, can_start, started, all_done, matches,
+ *   exempts, direct_qualifs, lbif: { nb_barragistes, nb_exempts_barrage },
+ *   tournament, game_params }
+ */
+async function loadBarrage(db, orgId, tournoiId) {
+  const { isQuillesMode, getBracketConfig, computeReclassementSerpentin, resolveDistance } = require('../utils/quilles-helpers');
+
+  // 1. Tournament (with Quilles columns)
+  const tournament = await new Promise((resolve, reject) => {
+    db.get(
+      `SELECT tournoi_id, nom, mode, categorie, debut, lieu, organization_id,
+              tournament_format, tournament_type, tour_number,
+              distance_matrix_id, fixed_distance, nb_tables
+         FROM tournoi_ext
+        WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+      [tournoiId, orgId],
+      (err, r) => err ? reject(err) : resolve(r)
+    );
+  });
+  if (!tournament) return { error: 'not_found' };
+
+  // 2. Skip barrage entirely for non-Quilles tournaments
+  if (!isQuillesMode(tournament.mode)) {
+    return { applicable: false, reason: 'carambole', tournament };
+  }
+
+  // 3. Load poule context to know if poules are done
+  const pouleCtx = await loadPouleMatches(db, orgId, tournoiId);
+  if (pouleCtx.error) return pouleCtx;
+
+  const allPoulesDone = (pouleCtx.poules || []).every(p =>
+    (p.matches || []).every(m => m.is_played)
+  );
+
+  // 4. Get LBIF config to know if barrage applies
+  const totalPlayers = await new Promise((resolve, reject) => {
+    db.get(
+      `SELECT COUNT(*)::int AS n FROM convocation_poules WHERE tournoi_id = $1`,
+      [tournoiId],
+      (err, r) => err ? reject(err) : resolve(r?.n || 0)
+    );
+  });
+
+  let lbifCfg;
+  try {
+    lbifCfg = await getBracketConfig(totalPlayers, { db });
+  } catch (e) {
+    return { applicable: false, reason: 'lbif_config_error', error: e.message, tournament };
+  }
+
+  // LBIF règlement exceptions : N ∈ {12, 23, 24} → no barrage
+  if (!lbifCfg.has_barrage) {
+    return {
+      applicable: false,
+      reason: 'lbif_no_barrage',
+      lbif: lbifCfg,
+      tournament,
+      message: `Pas de barrage prévu par LBIF pour ${totalPlayers} joueurs. Les ${lbifCfg.qualified_per_poule * lbifCfg.nb_poules} qualifiés des poules vont direct au tableau final.`
+    };
+  }
+
+  // 5. Compute qualified players from poules (top 2 per poule)
+  const qualifiedFromPoules = [];
+  for (const poule of pouleCtx.poules || []) {
+    const classement = poule.classement || [];
+    const top = classement.slice(0, lbifCfg.qualified_per_poule);
+    for (const c of top) {
+      qualifiedFromPoules.push({
+        licence: c.licence,
+        licence_normalized: String(c.licence || '').replace(/\s+/g, ''),
+        player_name: c.player_name,
+        club: c.club,
+        match_points: c.match_points,
+        points_scored: c.points_scored || c.points || 0,
+        poule_number: poule.number
+      });
+    }
+  }
+
+  // 6. Reclassement serpentin then split: top nb_exempts → exempts, rest → barragistes
+  const reranked = computeReclassementSerpentin(qualifiedFromPoules);
+  const exempts = reranked.slice(0, lbifCfg.nb_exempts_barrage);
+  const barragistes = reranked.slice(lbifCfg.nb_exempts_barrage,
+    lbifCfg.nb_exempts_barrage + lbifCfg.nb_barragistes);
+
+  // 7. Load direct qualifs (out-of-poule)
+  const direct_qualifs = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT cp.licence, cp.player_name, cp.club
+         FROM convocation_poules cp
+        WHERE cp.tournoi_id = $1
+          AND COALESCE(cp.is_direct_qualif, FALSE) = TRUE
+        ORDER BY cp.player_order`,
+      [tournoiId],
+      (err, rs) => err ? reject(err) : resolve(rs || [])
+    );
+  });
+
+  // 8. Load saved barrage matches
+  const savedMatches = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, match_number, table_number, p1_licence, p2_licence,
+              p1_points, p1_points_subis, p2_points, p2_points_subis,
+              referee_name, referee_licence,
+              entered_at, started_at, finished_at
+         FROM ddj_barrage_matches
+        WHERE tournoi_id = $1
+        ORDER BY match_number`,
+      [tournoiId],
+      (err, rs) => err ? reject(err) : resolve(rs || [])
+    );
+  });
+
+  // 9. Resolve distance for barrage phase
+  let distance = null;
+  try {
+    const resolved = await resolveDistance(tournament, lbifCfg.nb_poules, { db, phase: 'barrage' });
+    distance = resolved.distance;
+  } catch (e) { /* non-fatal */ }
+
+  return {
+    applicable: true,
+    can_start: allPoulesDone,
+    started: savedMatches.length > 0,
+    all_done: savedMatches.length > 0 && savedMatches.every(m => m.p1_points != null && m.p2_points != null),
+    tournament: { id: tournament.tournoi_id, nom: tournament.nom, mode: tournament.mode,
+                  categorie: tournament.categorie, debut: tournament.debut, lieu: tournament.lieu },
+    lbif: lbifCfg,
+    game_params: { distance, reprises: null },
+    barragistes,
+    exempts,
+    direct_qualifs,
+    matches: savedMatches,
+    expected_matches_count: Math.floor(lbifCfg.nb_barragistes / 2)
+  };
+}
+
+// GET /competitions/:id/barrage
+router.get('/competitions/:id/barrage', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+  try {
+    const ctx = await loadBarrage(db, orgId, tournoiId);
+    if (ctx.error === 'not_found') return res.status(404).json({ error: 'Tournoi introuvable' });
+    res.json(ctx);
+  } catch (err) {
+    console.error('[DdJ] /barrage GET error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /competitions/:id/barrage/setup
+// Computes the appariements (1v8, 2v7, 3v6, 4v5 cross-pairing) and inserts
+// the matches into ddj_barrage_matches. Idempotent : re-run after any
+// poule result update clears + recreates the matches (unless any match
+// already has scores, in which case it refuses to avoid data loss).
+router.post('/competitions/:id/barrage/setup', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+  try {
+    const ctx = await loadBarrage(db, orgId, tournoiId);
+    if (ctx.error) return res.status(404).json({ error: ctx.error });
+    if (!ctx.applicable) {
+      return res.status(409).json({ error: ctx.message || `Phase de barrage non applicable: ${ctx.reason}` });
+    }
+    if (!ctx.can_start) {
+      return res.status(409).json({ error: 'Toutes les poules doivent être terminées avant de lancer le barrage' });
+    }
+    // Refuse if any match already has scores (would overwrite results)
+    const anyScored = ctx.matches.some(m => m.p1_points != null || m.p2_points != null);
+    if (anyScored) {
+      return res.status(409).json({
+        error: 'Des scores ont déjà été saisis. Reset (DELETE) avant de re-setup.'
+      });
+    }
+
+    // Cross-pairing : top vs bottom (1v8, 2v7, 3v6, 4v5)
+    const barragistes = ctx.barragistes;
+    if (barragistes.length === 0) {
+      return res.status(409).json({ error: 'Aucun barragiste — vérifier la composition' });
+    }
+    if (barragistes.length % 2 !== 0) {
+      return res.status(400).json({
+        error: `Nb barragistes impair (${barragistes.length}) — incohérence LBIF. Vérifier la matrice.`
+      });
+    }
+
+    // Wipe existing matches (no scores → safe)
+    await new Promise((resolve, reject) => {
+      db.run(`DELETE FROM ddj_barrage_matches WHERE tournoi_id = $1`, [tournoiId],
+        (err) => err ? reject(err) : resolve());
+    });
+
+    const nMatches = barragistes.length / 2;
+    for (let i = 0; i < nMatches; i++) {
+      const p1 = barragistes[i];
+      const p2 = barragistes[barragistes.length - 1 - i];
+      await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO ddj_barrage_matches
+             (tournoi_id, match_number, p1_licence, p2_licence)
+           VALUES ($1, $2, $3, $4)`,
+          [tournoiId, i + 1, p1.licence, p2.licence],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+    }
+
+    res.json({ success: true, matches_count: nMatches });
+  } catch (err) {
+    console.error('[DdJ] /barrage/setup error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /competitions/:id/barrage — save a single match result
+// Body: { match_number, p1_points, p2_points, p1_points_subis?, p2_points_subis?,
+//         table_number?, referee_name?, referee_licence? }
+router.put('/competitions/:id/barrage', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+  const b = req.body || {};
+  const matchNumber = parseInt(b.match_number, 10);
+  if (!Number.isFinite(matchNumber) || matchNumber < 1) {
+    return res.status(400).json({ error: 'match_number requis' });
+  }
+  const fields = ['p1_points', 'p2_points', 'p1_points_subis', 'p2_points_subis'];
+  const parsed = {};
+  for (const f of fields) {
+    const v = b[f];
+    if (v === null || v === undefined || v === '') { parsed[f] = null; continue; }
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n) || n < 0) return res.status(400).json({ error: `${f} doit être un entier ≥ 0 ou null` });
+    parsed[f] = n;
+  }
+  // Symmetric derivation for Quilles: if p1_points_subis not provided, use p2_points
+  if (parsed.p1_points_subis == null && parsed.p2_points != null) parsed.p1_points_subis = parsed.p2_points;
+  if (parsed.p2_points_subis == null && parsed.p1_points != null) parsed.p2_points_subis = parsed.p1_points;
+
+  try {
+    // Verify tournament + ensure match exists
+    const match = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT bm.id, bm.p1_licence, bm.p2_licence
+           FROM ddj_barrage_matches bm
+           JOIN tournoi_ext te ON bm.tournoi_id = te.tournoi_id
+          WHERE bm.tournoi_id = $1 AND bm.match_number = $2
+            AND ($3::int IS NULL OR te.organization_id = $3)`,
+        [tournoiId, matchNumber, orgId],
+        (err, r) => err ? reject(err) : resolve(r)
+      );
+    });
+    if (!match) return res.status(404).json({ error: 'Match de barrage introuvable — lancer /barrage/setup d\'abord' });
+
+    const tableNumber = b.table_number != null && b.table_number !== ''
+      ? parseInt(b.table_number, 10) || null : null;
+    const refereeName = (b.referee_name || '').trim() || null;
+    const refereeLicence = (b.referee_licence || '').trim() || null;
+
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE ddj_barrage_matches SET
+           table_number = COALESCE($1, table_number),
+           p1_points = $2,
+           p1_points_subis = $3,
+           p2_points = $4,
+           p2_points_subis = $5,
+           referee_name = COALESCE($6, referee_name),
+           referee_licence = COALESCE($7, referee_licence),
+           entered_at = CURRENT_TIMESTAMP,
+           entered_by = $8,
+           started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+           finished_at = CASE WHEN $2 IS NOT NULL AND $4 IS NOT NULL
+                              THEN CURRENT_TIMESTAMP ELSE finished_at END
+         WHERE tournoi_id = $9 AND match_number = $10`,
+        [tableNumber, parsed.p1_points, parsed.p1_points_subis,
+         parsed.p2_points, parsed.p2_points_subis,
+         refereeName, refereeLicence, req.user.userId || null,
+         tournoiId, matchNumber],
+        (err) => err ? reject(err) : resolve()
+      );
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DdJ] /barrage PUT error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /competitions/:id/barrage/reset — wipe all barrage matches
+router.post('/competitions/:id/barrage/reset', authenticateToken, requireDdJ, async (req, res) => {
+  const db = getDb();
+  const orgId = req.user.organizationId || null;
+  const tournoiId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(tournoiId)) return res.status(400).json({ error: 'ID tournoi invalide' });
+  try {
+    const tournament = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT tournoi_id FROM tournoi_ext WHERE tournoi_id = $1
+           AND ($2::int IS NULL OR organization_id = $2)`,
+        [tournoiId, orgId],
+        (err, r) => err ? reject(err) : resolve(r)
+      );
+    });
+    if (!tournament) return res.status(404).json({ error: 'Tournoi introuvable' });
+    await new Promise((resolve, reject) => {
+      db.run(`DELETE FROM ddj_barrage_matches WHERE tournoi_id = $1`, [tournoiId],
+        (err) => err ? reject(err) : resolve());
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DdJ] /barrage/reset error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ----------------------------------------------------------------
 // Manual seed reordering for the bracket (post-poules ranking)
 // ----------------------------------------------------------------

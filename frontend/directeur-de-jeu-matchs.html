@@ -741,21 +741,33 @@
       // V 2.0.745 — Two branches depending on mode:
       //   single_poule → "Classement final" goes directly to recap (no bracket)
       //   bracket      → "Tableau final" goes to bracket page (existing flow)
+      // V 2.0.820 — Sprint 2 LBIF Phase 4: for Quilles tournaments with a
+      // barrage phase (per quilles_bracket_configs.has_barrage), insert the
+      // Barrage page between Matchs poules and Bracket.
       const allPoulesPlayed = state.poules.every(p =>
         p.matches.length > 0 && p.matches.every(m => m.is_played)
       );
       const isSinglePoule = state.mode === 'single_poule';
+      const isQuilles_m = typeof isQuillesMode === 'function'
+        && isQuillesMode(state.tournament && state.tournament.mode);
+      // For Quilles, route through /barrage page (which itself decides if
+      // the barrage phase applies and forwards to /bracket otherwise).
       const nextPage = isSinglePoule
         ? `directeur-de-jeu-recap.html?compId=${compId}`
-        : `directeur-de-jeu-bracket.html?compId=${compId}`;
+        : isQuilles_m
+          ? `directeur-de-jeu-barrage.html?compId=${compId}`
+          : `directeur-de-jeu-bracket.html?compId=${compId}`;
       const finalBtnAttrs = allPoulesPlayed
         ? `onclick="window.location.href='${nextPage}'"`
         : `disabled title="${isSinglePoule
             ? 'Tous les matchs de la poule doivent être terminés'
             : 'Toutes les poules doivent être terminées avant le tableau final'}"`;
       const finalBtnLabel = allPoulesPlayed
-        ? (isSinglePoule ? 'Classement final →' : 'Passer au tableau final →')
-        : (isSinglePoule ? 'Classement final → (matchs en cours)' : 'Passer au tableau final → (poules en cours)');
+        ? (isSinglePoule ? 'Classement final →'
+           : isQuilles_m ? '⚔️ Passer au barrage →' : 'Passer au tableau final →')
+        : (isSinglePoule ? 'Classement final → (matchs en cours)'
+           : isQuilles_m ? 'Passer au barrage → (poules en cours)'
+           : 'Passer au tableau final → (poules en cours)');
 
       document.getElementById('mainContent').innerHTML = `
         <div class="ddj-tabs">${tabsHtml}</div>

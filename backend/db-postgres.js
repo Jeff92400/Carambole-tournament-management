@@ -3021,6 +3021,36 @@ async function initializeDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_consolante_matches_tournoi ON ddj_consolante_matches(tournoi_id)`);
 
+    // V 2.0.820 — Sprint 2 LBIF Phase 4: barrage matches table
+    // Stores the elimination round between poules and bracket per LBIF
+    // chap 1.1.3. Players go through the barrage if has_barrage=true in the
+    // quilles_bracket_configs config; the nb_barragistes top players from
+    // the poule reclassement face each other in flat single-round matches.
+    // Winners join the exempts + direct qualifs in the bracket.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ddj_barrage_matches (
+        id SERIAL PRIMARY KEY,
+        tournoi_id INTEGER NOT NULL REFERENCES tournoi_ext(tournoi_id) ON DELETE CASCADE,
+        match_number INTEGER NOT NULL,
+        table_number INTEGER,
+        p1_licence TEXT NOT NULL,
+        p2_licence TEXT NOT NULL,
+        p1_points INTEGER,
+        p1_points_subis INTEGER,
+        p2_points INTEGER,
+        p2_points_subis INTEGER,
+        referee_name TEXT,
+        referee_licence TEXT,
+        entered_at TIMESTAMP,
+        entered_by INTEGER,
+        started_at TIMESTAMP,
+        finished_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tournoi_id, match_number)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_barrage_matches_tournoi ON ddj_barrage_matches(tournoi_id)`);
+
     // V 2.0.799 — Sprint 2 D.5 hotfix: ensure p1_points_subis / p2_points_subis
     // columns exist on the 3 DdJ match tables. The earlier guarded migration
     // at line ~2618 ran BEFORE the CREATE TABLE blocks below, so on a fresh

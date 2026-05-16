@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Directeur de Jeu — Barrage Quilles</title>
+  <link rel="icon" type="image/png" href="images/FrenchBillard-Icon-small.png">
+  <link rel="stylesheet" href="css/styles.css?v=357">
+  <script src="js/branding.js?v=197"></script>
+  <style>
+    .ddj-welcome-bar {
+      background: linear-gradient(135deg, var(--color-primary, #1F4788) 0%, var(--color-secondary, #667eea) 100%);
+      color: white;
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ddj-welcome-bar .tournament-title { font-size: 1.1em; font-weight: 700; }
+    .ddj-welcome-bar .tournament-meta { font-size: 0.9em; opacity: 0.92; }
+
+    .info-card {
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .info-card.exempts { border-color: #d97706; background: #fff8e1; }
+    .info-card.direct { border-color: #c8102e; background: #fff8f8; }
+    .info-card .card-title {
+      font-weight: 700;
+      font-size: 1em;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .info-card.exempts .card-title { color: #92400e; }
+    .info-card.direct .card-title { color: #8b0000; }
+    .player-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 4px;
+      font-size: 0.92em;
+      border-bottom: 1px dashed #e0e0e0;
+    }
+    .player-row:last-child { border-bottom: none; }
+    .player-row .rank {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85em; color: white;
+      background: #6c757d; flex-shrink: 0;
+    }
+    .info-card.exempts .player-row .rank { background: #d97706; }
+    .info-card.direct .player-row .rank { background: #c8102e; }
+    .player-row .name { font-weight: 600; flex: 1; }
+    .player-row .club { font-size: 0.78em; color: #666; }
+
+    /* Match cards — flat list (not bracket tree) */
+    .match-card {
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+    .match-card.played { border-color: #28a745; background: #f8fff9; }
+    .match-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: linear-gradient(90deg, #fff5f5, #fff);
+      border-radius: 8px 8px 0 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .match-card.played .match-card-header { background: linear-gradient(90deg, #d4edda, #e7f7eb); }
+    .match-title {
+      font-size: 1.05em; font-weight: 800; color: #c8102e;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .match-status {
+      font-size: 0.85em; color: #666; font-weight: 600;
+    }
+    .match-status.played { color: #28a745; }
+
+    .match-card-body { padding: 14px; }
+
+    .match-params-strip {
+      background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+      border-left: 3px solid #c8102e;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 0.86em;
+      color: #8b0000;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .match-players {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .match-player { text-align: center; }
+    .match-player .name { font-weight: 700; font-size: 1.05em; color: #222; }
+    .match-player .club { font-size: 0.78em; color: #666; margin-top: 2px; }
+    .match-vs { font-size: 1.2em; color: #888; font-weight: bold; }
+
+    .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .score-col {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .score-col.winner { background: #d4edda; box-shadow: inset 0 0 0 2px #28a745; }
+    .score-col.loser { background: #f8d7da; opacity: 0.85; }
+    .score-col-header {
+      font-size: 0.85em; font-weight: 600; color: #666;
+      margin-bottom: 8px; text-align: center;
+    }
+    .score-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .score-label { font-size: 0.82em; color: #555; flex: 1; }
+    .score-input {
+      width: 80px; padding: 8px 10px;
+      border: 1.5px solid #ccc; border-radius: 6px;
+      font-size: 1em; font-weight: 700; text-align: center;
+    }
+    .score-input:focus {
+      outline: none; border-color: #c8102e;
+      box-shadow: 0 0 0 3px rgba(200, 16, 46, 0.15);
+    }
+
+    .match-actions {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 14px; gap: 10px;
+    }
+    .btn-save {
+      padding: 10px 20px; border: none; border-radius: 6px;
+      background: linear-gradient(135deg, #c8102e, #8b0000);
+      color: white; font-weight: 700; cursor: pointer; font-size: 0.95em;
+    }
+    .btn-save:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(200, 16, 46, 0.3); }
+
+    .ddj-action-bar {
+      display: flex; gap: 10px; justify-content: space-between;
+      flex-wrap: wrap; padding-top: 16px; margin-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .ddj-btn {
+      padding: 12px 20px; border-radius: 8px; border: none;
+      font-size: 1em; font-weight: 700; cursor: pointer;
+    }
+    .ddj-btn-secondary { background: #6c757d; color: white; }
+    .ddj-btn-primary {
+      background: linear-gradient(135deg, #28a745, #218838);
+      color: white; flex: 1; min-width: 220px;
+    }
+    .ddj-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .ddj-loading, .ddj-empty {
+      text-align: center; padding: 60px 20px; color: #888;
+    }
+
+    .alert-info {
+      background: #e0f2fe; border-left: 4px solid #0284c7;
+      padding: 14px 18px; border-radius: 6px; margin-bottom: 14px;
+      color: #075985;
+    }
+    .alert-warning {
+      background: #fef3c7; border-left: 4px solid #d97706;
+      padding: 14px 18px; border-radius: 6px; margin-bottom: 14px;
+      color: #92400e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="navbar">
+      <div>
+        <h2 style="margin-bottom: 0;"><img id="app-header-icon" src="images/FrenchBillard-Icon-small.png" alt="" style="height: 48px; width: 48px; vertical-align: middle; margin-right: 8px;"><span id="app-org-name" data-page-title="Barrage Quilles">CDB</span></h2>
+      </div>
+      <div class="nav-links">
+        <a href="#" id="matchsBackBtn">← Matchs poules</a>
+        <a href="dashboard.html" class="nav-link" style="margin-right:8px;">🏠 Tableau de bord</a>
+        <a href="#" id="logoutBtn" class="nav-logout">Déconnexion</a>
+      </div>
+    </div>
+
+    <div id="errorMessage" class="error" style="display: none;"></div>
+
+    <div class="ddj-welcome-bar">
+      <div>
+        <div class="tournament-title" id="tournamentTitle">Chargement…</div>
+        <div class="tournament-meta" id="tournamentMeta"></div>
+      </div>
+      <div class="tournament-meta" id="tournamentParams"></div>
+    </div>
+
+    <div id="content" class="ddj-loading">Chargement de la phase de barrage…</div>
+  </div>
+
+  <script src="js/auth-utils.js?v=197"></script>
+  <script src="js/app-branding.js?v=216"></script>
+  <script src="js/ddj-step-nav.js?v=3"></script>
+  <script src="js/quilles-banner.js?v=1"></script>
+  <script src="js/dj-v3.js?v=10"></script>
+  <script>
+    if (!requireAuth()) throw new Error('Not authenticated');
+    const userRole = sessionStorage.getItem('userRole');
+    if (userRole !== 'directeur_jeu' && userRole !== 'admin') {
+      window.location.href = 'dashboard.html';
+      throw new Error('Not authorized');
+    }
+    const API_URL = '/api';
+    const token = sessionStorage.getItem('token');
+
+    const params = new URLSearchParams(window.location.search);
+    const compId = parseInt(params.get('compId'), 10);
+    if (!Number.isFinite(compId)) {
+      document.getElementById('content').innerHTML = '<div class="error">URL invalide. Format : ?compId=&lt;tournoiId&gt;</div>';
+      throw new Error('Missing compId');
+    }
+
+    document.getElementById('matchsBackBtn').href = 'directeur-de-jeu-matchs.html?compId=' + compId;
+    document.getElementById('logoutBtn').addEventListener('click', (e) => { e.preventDefault(); logout(); });
+
+    let state = { ctx: null };
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    async function loadBarrage() {
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/barrage`);
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error || `Erreur ${resp.status}`);
+        }
+        state.ctx = await resp.json();
+        render();
+      } catch (err) {
+        console.error('[Barrage] load error:', err);
+        document.getElementById('content').innerHTML = `<div class="error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function render() {
+      const ctx = state.ctx;
+      if (!ctx) return;
+      const t = ctx.tournament || {};
+
+      if (typeof renderQuillesBanner === 'function') renderQuillesBanner(t);
+
+      document.getElementById('tournamentTitle').textContent =
+        `${t.mode || ''}${t.nom ? ' — ' + t.nom : ''}`.trim();
+      document.getElementById('tournamentMeta').textContent =
+        `${t.debut ? new Date(t.debut).toLocaleDateString('fr-FR') : ''}${t.lieu ? ' · ' + t.lieu : ''}`;
+      document.getElementById('tournamentParams').textContent = 'Étape Barrage (Quilles LBIF)';
+
+      // Not applicable cases
+      if (!ctx.applicable) {
+        let msg = ctx.message || `Phase de barrage non applicable pour ce tournoi (${ctx.reason || 'raison inconnue'}).`;
+        let nextBtn = '';
+        if (ctx.reason === 'lbif_no_barrage' || ctx.reason === 'carambole') {
+          nextBtn = `<a href="directeur-de-jeu-bracket.html?compId=${compId}" class="ddj-btn ddj-btn-primary" style="text-decoration: none; display: inline-block;">Continuer vers le tableau final →</a>`;
+        }
+        document.getElementById('content').innerHTML = `
+          <div class="alert-info">${escapeHtml(msg)}</div>
+          <div class="ddj-action-bar">
+            <a href="directeur-de-jeu-matchs.html?compId=${compId}" class="ddj-btn ddj-btn-secondary" style="text-decoration: none;">← Retour matchs poules</a>
+            ${nextBtn}
+          </div>`;
+        return;
+      }
+
+      // Applicable but poules not done
+      if (!ctx.can_start) {
+        document.getElementById('content').innerHTML = `
+          <div class="alert-warning">
+            ⏳ Toutes les poules doivent être terminées avant de lancer le barrage.<br>
+            Vérifiez à l'étape <strong>Matchs poules</strong> que tous les scores sont saisis.
+          </div>
+          <div class="ddj-action-bar">
+            <a href="directeur-de-jeu-matchs.html?compId=${compId}" class="ddj-btn ddj-btn-secondary" style="text-decoration: none;">← Retour matchs poules</a>
+          </div>`;
+        return;
+      }
+
+      // Build summary cards (barragistes, exempts, direct qualifs)
+      const exemptsCard = (ctx.exempts || []).length === 0 ? '' : `
+        <div class="info-card exempts">
+          <div class="card-title">⏭️ Exemptés du barrage (vont direct au bracket) — ${ctx.exempts.length}</div>
+          ${ctx.exempts.map(p => `
+            <div class="player-row">
+              <div class="rank">${p.serpentin_rank}</div>
+              <div class="name">${escapeHtml(p.player_name)}</div>
+              <div class="club">${escapeHtml(p.club || '')}</div>
+            </div>
+          `).join('')}
+        </div>`;
+
+      const directCard = (ctx.direct_qualifs || []).length === 0 ? '' : `
+        <div class="info-card direct">
+          <div class="card-title">🎯 Qualifiés d'office (bracket direct, jamais joué en poule) — ${ctx.direct_qualifs.length}</div>
+          ${ctx.direct_qualifs.map((p, i) => `
+            <div class="player-row">
+              <div class="rank">${i + 1}</div>
+              <div class="name">${escapeHtml(p.player_name)}</div>
+              <div class="club">${escapeHtml(p.club || '')}</div>
+            </div>
+          `).join('')}
+        </div>`;
+
+      // If no matches yet → show setup button
+      if (!ctx.started) {
+        document.getElementById('content').innerHTML = `
+          ${exemptsCard}
+          ${directCard}
+          <div class="alert-info">
+            <strong>${ctx.lbif.nb_barragistes} barragistes</strong> doivent jouer le barrage
+            (${ctx.expected_matches_count} match${ctx.expected_matches_count > 1 ? 's' : ''} d'élimination directe).<br>
+            Distance : <strong>${ctx.game_params?.distance || '?'} pts</strong>.
+          </div>
+          <div class="ddj-action-bar">
+            <a href="directeur-de-jeu-matchs.html?compId=${compId}" class="ddj-btn ddj-btn-secondary" style="text-decoration: none;">← Retour matchs poules</a>
+            <button class="ddj-btn ddj-btn-primary" onclick="setupBarrage()">⚔️ Lancer le barrage (créer les appariements)</button>
+          </div>`;
+        return;
+      }
+
+      // Matches exist → render them
+      const dist = ctx.game_params?.distance || null;
+      const matchesHtml = (ctx.matches || []).map(m => {
+        const p1Name = _findPlayerName(m.p1_licence, ctx);
+        const p2Name = _findPlayerName(m.p2_licence, ctx);
+        const isPlayed = m.p1_points != null && m.p2_points != null;
+        let col1Class = 'score-col', col2Class = 'score-col';
+        if (isPlayed) {
+          if (m.p1_points > m.p2_points) { col1Class += ' winner'; col2Class += ' loser'; }
+          else if (m.p2_points > m.p1_points) { col1Class += ' loser'; col2Class += ' winner'; }
+        }
+        return `
+          <div class="match-card ${isPlayed ? 'played' : ''}" data-match="${m.match_number}">
+            <div class="match-card-header">
+              <div class="match-title">⚔️ Match ${m.match_number}${m.table_number ? ` · Table ${m.table_number}` : ''}</div>
+              <div class="match-status ${isPlayed ? 'played' : ''}">${isPlayed ? '✓ Terminé' : 'À jouer'}</div>
+            </div>
+            <div class="match-card-body">
+              ${dist ? `<div class="match-params-strip">🎯 Distance Quilles : ${dist} pts</div>` : ''}
+              <div class="match-players">
+                <div class="match-player">
+                  <div class="name">${escapeHtml(p1Name)}</div>
+                </div>
+                <div class="match-vs">VS</div>
+                <div class="match-player">
+                  <div class="name">${escapeHtml(p2Name)}</div>
+                </div>
+              </div>
+              <div class="score-grid">
+                <div class="${col1Class}">
+                  <div class="score-col-header">${escapeHtml(p1Name)}</div>
+                  <div class="score-row">
+                    <span class="score-label">Points :</span>
+                    <input type="number" class="score-input" data-side="p1" min="0" ${dist ? `max="${dist}"` : ''}
+                           value="${m.p1_points != null ? m.p1_points : ''}">
+                  </div>
+                </div>
+                <div class="${col2Class}">
+                  <div class="score-col-header">${escapeHtml(p2Name)}</div>
+                  <div class="score-row">
+                    <span class="score-label">Points :</span>
+                    <input type="number" class="score-input" data-side="p2" min="0" ${dist ? `max="${dist}"` : ''}
+                           value="${m.p2_points != null ? m.p2_points : ''}">
+                  </div>
+                </div>
+              </div>
+              <div class="match-actions">
+                <span style="font-size: 0.85em; color: #666;">Saisissez les scores puis Enregistrer</span>
+                <button class="btn-save" onclick="saveMatch(${m.match_number})">💾 Enregistrer</button>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+
+      const allDone = ctx.all_done;
+      document.getElementById('content').innerHTML = `
+        ${exemptsCard}
+        ${directCard}
+        <h3 style="margin-top: 10px; color: #c8102e;">⚔️ Matchs de barrage (${ctx.matches.length})</h3>
+        ${matchesHtml}
+        <div class="ddj-action-bar">
+          <a href="directeur-de-jeu-matchs.html?compId=${compId}" class="ddj-btn ddj-btn-secondary" style="text-decoration: none;">← Retour matchs poules</a>
+          <button class="ddj-btn ddj-btn-secondary" onclick="resetBarrage()" style="background: #dc3545;">🗑️ Reset barrage</button>
+          <a href="directeur-de-jeu-bracket.html?compId=${compId}" class="ddj-btn ddj-btn-primary ${allDone ? '' : 'disabled'}"
+             style="text-decoration: none; display: inline-block;${allDone ? '' : 'pointer-events: none; opacity: 0.5;'}">
+            ${allDone ? '✓ Continuer vers le tableau final →' : 'Terminer tous les matchs pour continuer'}
+          </a>
+        </div>`;
+    }
+
+    function _findPlayerName(licence, ctx) {
+      const lic = String(licence || '').replace(/\s+/g, '');
+      const inBarragistes = (ctx.barragistes || []).find(p => p.licence_normalized === lic);
+      if (inBarragistes) return inBarragistes.player_name;
+      // Fallback to licence
+      return licence || '?';
+    }
+
+    async function setupBarrage() {
+      if (!confirm('Lancer le barrage ?\n\nLes appariements (1 vs 8, 2 vs 7, …) seront créés selon le reclassement serpentin LBIF.')) return;
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/barrage/setup`, {
+          method: 'POST'
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `Erreur ${resp.status}`);
+        await loadBarrage();
+      } catch (err) {
+        alert('❌ ' + err.message);
+      }
+    }
+
+    async function saveMatch(matchNumber) {
+      const card = document.querySelector(`.match-card[data-match="${matchNumber}"]`);
+      if (!card) return;
+      const p1 = card.querySelector('[data-side="p1"]').value;
+      const p2 = card.querySelector('[data-side="p2"]').value;
+      if (p1 === '' || p2 === '') {
+        alert('Renseignez les points des deux joueurs.');
+        return;
+      }
+      if (parseInt(p1, 10) === parseInt(p2, 10)) {
+        alert('Pas de match nul en barrage (élimination directe).');
+        return;
+      }
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/barrage`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            match_number: matchNumber,
+            p1_points: parseInt(p1, 10),
+            p2_points: parseInt(p2, 10)
+          })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `Erreur ${resp.status}`);
+        await loadBarrage();
+      } catch (err) {
+        alert('❌ ' + err.message);
+      }
+    }
+
+    async function resetBarrage() {
+      if (!confirm('Effacer tous les matchs de barrage ? Les scores saisis seront perdus.\n\nUne nouvelle phase pourra être lancée ensuite.')) return;
+      try {
+        const resp = await authFetch(`${API_URL}/directeur-jeu/competitions/${compId}/barrage/reset`, {
+          method: 'POST'
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `Erreur ${resp.status}`);
+        await loadBarrage();
+      } catch (err) {
+        alert('❌ ' + err.message);
+      }
+    }
+
+    loadBarrage();
+  </script>
+</body>
+</html>
