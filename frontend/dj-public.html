@@ -723,7 +723,9 @@
       //   has_barrage = false → 2 cols : Poules | Phase finale (LBIF exceptions 12/23/24)
       const hasBarrage = data.barrage && data.barrage.applicable && data.barrage.has_barrage;
       if (hasBarrage) {
-        $('t-main').style.gridTemplateColumns = '1.2fr 0.9fr 1.4fr';
+        // V 2.0.830 — Phase finale column slightly wider to host the
+        // grouped Quilles bracket list (up to 8 1/8 + 4 QF + 2 SF + F/PF).
+        $('t-main').style.gridTemplateColumns = '1.1fr 0.8fr 1.6fr';
         $('t-main').innerHTML = `
           <div class="col">
             <div class="col-title">Poules</div>
@@ -890,6 +892,11 @@
     if (!b || !b.phases || b.phases.length === 0 || !b.available) {
       return `<div class="bracket-empty">En attente de la fin des poules…</div>`;
     }
+    // V 2.0.830 — Sprint 2 LBIF Phase 5: Quilles dynamic bracket (mode
+    // 'lbif_bracket') has EIGHTH1-8 / QF1-4 / SF1-2 / F / PF. The carambole
+    // 3-column visual is too rigid for 4 or 8 first-round matches, so we
+    // render Quilles as a vertical grouped list (one section per round).
+    if (b.mode === 'lbif_bracket') return renderBracketQuilles(b);
     const byPhase = {};
     for (const ph of b.phases) byPhase[ph.phase] = ph;
     const sf1 = byPhase['SF1'];
@@ -920,6 +927,50 @@
           </div>
         </div>
       </div>`;
+  }
+
+  // ---- BRACKET QUILLES (V 2.0.830 — dynamic 8/16-player LBIF bracket) ----
+  // Renders the Quilles bracket as a vertical list grouped by round:
+  //   1/8 (if 16-bracket) → 1/4 → 1/2 → Finale + Petite finale.
+  // Each match uses the same renderBmatch() card as the carambole bracket
+  // so the TV visual stays consistent.
+  function renderBracketQuilles(b) {
+    const byPhase = {};
+    for (const ph of b.phases) byPhase[ph.phase] = ph;
+    const sections = [];
+    const has16 = b.phases.some(p => p.phase && p.phase.startsWith('EIGHTH'));
+
+    const renderGroup = (title, phases, labelFn, opts) => {
+      const cards = phases.map(ph => byPhase[ph]
+        ? renderBmatch(byPhase[ph], labelFn(ph), opts)
+        : `<div class="bmatch empty"><div class="bphase">${escapeHtml(labelFn(ph))}</div><div class="bp-line"><span class="bp-name">à venir</span></div></div>`
+      ).join('');
+      sections.push(`
+        <div class="conso-section" style="margin-bottom:10px;">
+          <div class="col-title" style="font-size:0.85em;opacity:0.85;margin-bottom:4px;">${escapeHtml(title)}</div>
+          <div class="conso-list">${cards}</div>
+        </div>`);
+    };
+
+    if (has16) {
+      renderGroup('1/8 de finale',
+        ['EIGHTH1','EIGHTH2','EIGHTH3','EIGHTH4','EIGHTH5','EIGHTH6','EIGHTH7','EIGHTH8'],
+        ph => ph.replace('EIGHTH', '1/8 n°'),
+        { showMedals: false });
+    }
+    renderGroup('1/4 de finale',
+      ['QF1','QF2','QF3','QF4'],
+      ph => ph.replace('QF', '1/4 n°'),
+      { showMedals: false });
+    renderGroup('Demi-finales',
+      ['SF1','SF2'],
+      ph => ph === 'SF1' ? '½ Finale 1' : '½ Finale 2',
+      { showMedals: false });
+    renderGroup('Finale & Petite finale',
+      ['F','PF'],
+      ph => ph === 'F' ? 'Finale' : 'Petite finale (3ᵉ)',
+      {}); // medals on
+    return sections.join('');
   }
 
   function renderBmatch(m, label, opts) {
