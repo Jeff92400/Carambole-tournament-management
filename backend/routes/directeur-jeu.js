@@ -4497,9 +4497,36 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
     if (bracketCtx.error) {
       return res.status(bracketCtx.status || 500).json({ error: bracketCtx.error });
     }
-    const consolanteCtx = await loadConsolante(db, orgId, tournoiId);
-    if (consolanteCtx.error) {
-      return res.status(consolanteCtx.status || 500).json({ error: consolanteCtx.error });
+    // V 2.0.838 — Quilles LBIF has no consolante (per chap 1.1.3). Skip
+    // loadConsolante entirely and return an empty shell. This avoids any
+    // edge case in loadConsolante's flow when fed a Quilles bracket (which
+    // has zero non_qualifiers — by design, since barrage losers are
+    // eliminated). Previously, loadConsolante did early-return on empty
+    // non_qualifiers but something in the path still threw, causing the
+    // recap 500.
+    let consolanteCtx;
+    const isQuilles = (() => {
+      try {
+        const { isQuillesMode } = require('../utils/quilles-helpers');
+        return isQuillesMode(pouleCtx.tournament && pouleCtx.tournament.mode);
+      } catch (_) { return false; }
+    })();
+    if (isQuilles) {
+      consolanteCtx = {
+        tournament: pouleCtx.tournament,
+        game_params: pouleCtx.game_params,
+        can_start: false,
+        bracket_can_start: bracketCtx.can_start,
+        non_qualifiers: [],
+        consolante_size: 0,
+        phases: [],
+        final_places: null
+      };
+    } else {
+      consolanteCtx = await loadConsolante(db, orgId, tournoiId);
+      if (consolanteCtx.error) {
+        return res.status(consolanteCtx.status || 500).json({ error: consolanteCtx.error });
+      }
     }
 
     // Overall classement: bracket 1-4 + consolante 5+
