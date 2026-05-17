@@ -4755,6 +4755,24 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
     });
     ffbClassement.forEach((p, i) => { p.rank = i + 1; });
 
+    // V 2.0.844 — Sprint 2 LBIF Phase 6B: compute the LBIF classement par
+    // points for Quilles tournaments. Each player gets a "position" key
+    // ('1st'|'2nd'|'semi'|'quarter'|'eighth'|'barrage'|'poule_3rd_*'),
+    // looked up against the lbif_points table (V 2.0.843 schema; per-org
+    // override + platform default). Carambole tournaments get null so the
+    // frontend can skip rendering the section.
+    let lbifClassement = null;
+    if (isQuilles) {
+      try {
+        lbifClassement = await buildLbifClassement(db, orgId, tournoiId, {
+          pouleCtx, bracketCtx
+        });
+      } catch (e) {
+        console.error('[recap] buildLbifClassement failed:', e.message);
+        // Don't break the recap if the LBIF classement throws — log + skip.
+      }
+    }
+
     res.json({
       tournament: pouleCtx.tournament,
       game_params: pouleCtx.game_params,
@@ -4774,7 +4792,8 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
         final_places: consolanteCtx.final_places || null
       },
       overall_classement: overall,
-      ffb_classement: ffbClassement
+      ffb_classement: ffbClassement,
+      lbif_classement: lbifClassement
     });
   } catch (err) {
     // V 2.0.837 — surface the real error message so we can diagnose Quilles
@@ -4913,6 +4932,207 @@ async function buildFFBRanking(db, tournoiId, pouleCtx, options = {}) {
   // Add 1-based rank
   arr.forEach((p, i) => { p.rank = i + 1; });
   return arr;
+}
+
+// ============================================================================
+// V 2.0.844 — Sprint 2 LBIF Phase 6B: buildLbifClassement
+// ============================================================================
+//
+// Computes each player's LBIF "position" key + the corresponding points from
+// the lbif_points table. The position is derived from the player's actual
+// outcome in the tournament:
+//
+//   - Final placement (bracket.final_places): 1 → '1st', 2 → '2nd',
+//     3 or 4 → 'semi'.
+//   - Bracket participants who didn't reach the SF: derive from the deepest
+//     bracket phase they entered. Lost in QF → 'quarter'. Lost in EIGHTH →
+//     'eighth'.
+//   - Players who played the barrage but didn't make the bracket → 'barrage'.
+//   - Players eliminated at poule stage (didn't make top-2):
+//       * with >= 1 win  → 'poule_3rd_1win'
+//       * with 0 wins    → 'poule_3rd_0win'
+//
+// Returns an ordered array (highest points first) of:
+//   { licence, name, club, position, position_label, points }
+//
+// Per LBIF règlement chap 1.1.1.G / 3.1.G (identical for 5Q + 9Q).
+// ============================================================================
+
+const _LBIF_POSITION_LABELS = {
+  '1st':            'Vainqueur',
+  '2nd':            'Finaliste',
+  'semi':           '1/2 finaliste',
+  'quarter':        '1/4 de finale',
+  'eighth':         '1/8 de finale',
+  'barrage':        'Barrage',
+  'poule_3rd_1win': '3e poule (1 victoire)',
+  'poule_3rd_0win': '3e poule (0 victoire)'
+};
+
+async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx }) {
+  const { getLbifPointsForOrg } = require('../utils/quilles-helpers');
+  const pointsMap = await getLbifPointsForOrg(db, orgId);
+  const normLic = (s) => String(s || '').replace(/\s+/g, '');
+
+  // 1. Gather every player who took part (poule players + qualifiés d'office)
+  const playerRows = await new Promise((resolve, reject) => {
+    db.all(
+      `SELECT licence, player_name, club, poule_number,
+              COALESCE(is_direct_qualif, FALSE) AS is_direct_qualif
+         FROM convocation_poules
+        WHERE tournoi_id = $1`,
+      [tournoiId], (err, rs) => err ? reject(err) : resolve(rs || [])
+    );
+  });
+  if (!playerRows.length) return [];
+
+  // 2. Build a per-licence summary: poule stats + bracket-deepest-phase
+  const summary = new Map(); // normLic → object
+  for (const r of playerRows) {
+    summary.set(normLic(r.licence), {
+      licence: r.licence,
+      name: r.player_name,
+      club: r.club,
+      poule_number: r.poule_number,
+      is_direct_qualif: !!r.is_direct_qualif,
+      poule_wins: 0,
+      poule_qualified: false,   // top-N of poule
+      barrage_played: false,
+      barrage_won: false,
+      bracket_phase_lost: null, // 'EIGHTH' | 'QF' | 'SF' | 'F' | 'PF' | null
+      bracket_phase_won: null,  // 'F' (= 1st) | 'PF' (= 3rd) | null
+      final_place: null,
+      position: null,
+      points: 0
+    });
+  }
+
+  // 3. Poule stats — qualified set + wins for the 3rd-of-poule subcategory
+  for (const poule of pouleCtx.poules || []) {
+    const top = (poule.classement || []).slice(0, 2); // LBIF qualifies top-2
+    const topSet = new Set(top.map(c => normLic(c.licence)));
+    for (const c of poule.classement || []) {
+      const s = summary.get(normLic(c.licence));
+      if (!s) continue;
+      s.poule_wins = c.wins || 0;
+      s.poule_qualified = topSet.has(normLic(c.licence));
+    }
+  }
+
+  // 4. Barrage outcomes (from ddj_barrage_matches via direct query — avoid
+  //    re-running loadBarrage which is heavy).
+  const barrageRows = await new Promise((resolve) => {
+    db.all(
+      `SELECT p1_licence, p2_licence, p1_points, p2_points
+         FROM ddj_barrage_matches WHERE tournoi_id = $1`,
+      [tournoiId], (err, rs) => resolve(err ? [] : (rs || []))
+    );
+  });
+  for (const m of barrageRows) {
+    const k1 = normLic(m.p1_licence), k2 = normLic(m.p2_licence);
+    const s1 = summary.get(k1), s2 = summary.get(k2);
+    if (s1) s1.barrage_played = true;
+    if (s2) s2.barrage_played = true;
+    if (m.p1_points != null && m.p2_points != null) {
+      if (m.p1_points > m.p2_points && s1) s1.barrage_won = true;
+      else if (m.p2_points > m.p1_points && s2) s2.barrage_won = true;
+    }
+  }
+
+  // 5. Bracket outcomes — walk phases and tag each player's deepest result.
+  // Phase ordering matters: we want the DEEPEST phase reached, so iterate
+  // in reverse depth order (F + PF first, then SF, QF, EIGHTH).
+  const phaseDepth = (ph) => {
+    if (ph === 'F' || ph === 'PF') return 5;
+    if (ph === 'SF1' || ph === 'SF2') return 4;
+    if (ph && ph.startsWith('QF')) return 3;
+    if (ph && ph.startsWith('EIGHTH')) return 2;
+    return 0;
+  };
+  const phaseFamily = (ph) => {
+    if (ph === 'F') return 'F';
+    if (ph === 'PF') return 'PF';
+    if (ph === 'SF1' || ph === 'SF2') return 'SF';
+    if (ph && ph.startsWith('QF')) return 'QF';
+    if (ph && ph.startsWith('EIGHTH')) return 'EIGHTH';
+    return null;
+  };
+  const sortedPhases = (bracketCtx.phases || [])
+    .filter(ph => ph.is_played && ph.p1 && ph.p2)
+    .sort((a, b) => phaseDepth(b.phase) - phaseDepth(a.phase));
+
+  for (const ph of sortedPhases) {
+    const family = phaseFamily(ph.phase);
+    if (!family) continue;
+    const p1k = normLic(ph.p1.licence), p2k = normLic(ph.p2.licence);
+    const s1 = summary.get(p1k), s2 = summary.get(p2k);
+    // Winner / loser by points
+    let winnerSummary = null, loserSummary = null;
+    if (ph.p1_points > ph.p2_points) { winnerSummary = s1; loserSummary = s2; }
+    else if (ph.p2_points > ph.p1_points) { winnerSummary = s2; loserSummary = s1; }
+    // F: winner = 1st, loser = 2nd. PF: winner = 3rd, loser = 4th.
+    // Other phases: only the LOSER's depth matters (winners advance further).
+    if (family === 'F') {
+      if (winnerSummary && !winnerSummary.bracket_phase_won) winnerSummary.bracket_phase_won = 'F';
+      if (loserSummary  && !loserSummary.bracket_phase_lost) loserSummary.bracket_phase_lost  = 'F';
+    } else if (family === 'PF') {
+      if (winnerSummary && !winnerSummary.bracket_phase_won) winnerSummary.bracket_phase_won = 'PF';
+      if (loserSummary  && !loserSummary.bracket_phase_lost) loserSummary.bracket_phase_lost  = 'PF';
+    } else {
+      // Loser of SF/QF/EIGHTH stops here; winner continues (handled by deeper phase already processed).
+      if (loserSummary && !loserSummary.bracket_phase_lost) loserSummary.bracket_phase_lost = family;
+    }
+  }
+
+  // 6. Final places straight from bracketCtx.final_places (authoritative).
+  for (const fp of (bracketCtx.final_places || [])) {
+    const s = summary.get(normLic(fp.licence));
+    if (s) s.final_place = fp.place;
+  }
+
+  // 7. Map each player's outcome to an LBIF position key.
+  for (const s of summary.values()) {
+    if (s.final_place === 1) s.position = '1st';
+    else if (s.final_place === 2) s.position = '2nd';
+    else if (s.final_place === 3 || s.final_place === 4) s.position = 'semi';
+    else if (s.bracket_phase_lost === 'SF') s.position = 'semi';
+    else if (s.bracket_phase_lost === 'QF') s.position = 'quarter';
+    else if (s.bracket_phase_lost === 'EIGHTH') s.position = 'eighth';
+    else if (s.barrage_played && !s.barrage_won) s.position = 'barrage';
+    else if (!s.poule_qualified && !s.is_direct_qualif) {
+      s.position = s.poule_wins >= 1 ? 'poule_3rd_1win' : 'poule_3rd_0win';
+    } else {
+      // Edge case: qualifié d'office or exempt whose bracket result is missing.
+      // Skip (position null) so the row doesn't appear in the classement until
+      // the tournament finishes. Avoids assigning random points mid-event.
+      s.position = null;
+    }
+    s.points = s.position ? (pointsMap[s.position] || 0) : 0;
+  }
+
+  // 8. Build the output array — ordered by points desc, then poule_wins desc,
+  //    then name for deterministic tie-break.
+  const out = [...summary.values()]
+    .filter(s => s.position) // omit unresolved (mid-tournament safety)
+    .map(s => ({
+      licence: s.licence,
+      name: s.name,
+      club: s.club,
+      poule_number: s.poule_number || null,
+      position: s.position,
+      position_label: _LBIF_POSITION_LABELS[s.position] || s.position,
+      points: s.points,
+      final_place: s.final_place
+    }))
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      // Final places (1-4) come first within their points bucket
+      const ap = a.final_place || 99, bp = b.final_place || 99;
+      if (ap !== bp) return ap - bp;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  out.forEach((p, i) => { p.rank = i + 1; });
+  return out;
 }
 
 // ============================================================================
