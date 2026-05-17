@@ -4929,7 +4929,9 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
       },
       overall_classement: overall,
       ffb_classement: ffbClassement,
-      lbif_classement: lbifClassement
+      lbif_classement: lbifClassement,
+      // V 2.0.855 — temporary debug, pulled off the array's _debug prop
+      lbif_debug: (lbifClassement && lbifClassement._debug) || null
     });
   } catch (err) {
     // V 2.0.837 — surface the real error message so we can diagnose Quilles
@@ -5388,6 +5390,36 @@ async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx 
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
   out.forEach((p, i) => { p.rank = i + 1; });
+
+  // V 2.0.855 — Temporary debug payload. Lets us see WHY a player is missing
+  // from the LBIF classement (in production: David BERTRAND, direct qualif,
+  // QF1 loser, dropped despite V 2.0.851/852/853/854 fixes). Will be
+  // reverted once the root cause is identified.
+  out._debug = {
+    summary_count: summary.size,
+    summary_keys: [...summary.keys()],
+    qualifier_keys: (bracketCtx.qualifiers || []).map(q => normLic(q.licence)),
+    qualifier_details: (bracketCtx.qualifiers || []).map(q => {
+      const k = normLic(q.licence);
+      const s = summary.get(k);
+      return {
+        name: q.player_name, lic: q.licence, source: q.source, normLic: k,
+        inSummary: !!s,
+        position: s ? s.position : '(no summary)',
+        bracket_phase_lost: s ? s.bracket_phase_lost : null,
+        bracket_phase_won: s ? s.bracket_phase_won : null,
+        final_place: s ? s.final_place : null,
+        poule_qualified: s ? s.poule_qualified : null,
+        is_direct_qualif: s ? s.is_direct_qualif : null
+      };
+    }),
+    sortedPhases_summary: sortedPhases.map(ph => ({
+      phase: ph.phase, is_played: ph.is_played,
+      p1_lic: phaseLicences(ph).p1, p2_lic: phaseLicences(ph).p2,
+      p1_points: ph.p1_points, p2_points: ph.p2_points
+    }))
+  };
+
   return out;
 }
 
