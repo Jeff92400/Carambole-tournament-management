@@ -2985,11 +2985,29 @@ async function loadBracketQuilles(db, orgId, tournoiId, pouleCtx) {
 
   const buildPhase = (phase, p1, p2, depends_on = null) => {
     const saved = savedByPhase.get(phase) || null;
+    // V 2.0.851 — When the upstream chain didn't resolve a player (e.g. a
+    // QF or SF was edited / cleared after the F was already played), fall
+    // back to the licences stored on the saved row. These were written
+    // when the match was actually entered, so they're the source of truth.
+    // Without this, deeper-phase final_places would lose the winner's name
+    // (observed in production: F was played but SF1 was "en attente", so
+    // place #1 came back with licence=undefined → empty cell on the recap).
+    if (!p1 && saved && saved.p1_licence) {
+      p1 = findQualifier(String(saved.p1_licence).replace(/\s+/g, ''));
+    }
+    if (!p2 && saved && saved.p2_licence) {
+      p2 = findQualifier(String(saved.p2_licence).replace(/\s+/g, ''));
+    }
     const m = {
       phase,
       can_enter: !!(p1 && p2),
       depends_on,
       p1: p1 || null, p2: p2 || null,
+      // V 2.0.851 — expose saved licences so callers can recover after a
+      // chain break (used by the F/PF outcome derivation below + by
+      // buildLbifClassement when it walks the phase list).
+      p1_licence_saved: saved ? (saved.p1_licence || null) : null,
+      p2_licence_saved: saved ? (saved.p2_licence || null) : null,
       table_number: saved ? saved.table_number : null,
       p1_points: saved ? saved.p1_points : null,
       p1_reprises: saved ? saved.p1_reprises : null,
@@ -3096,18 +3114,48 @@ async function loadBracketQuilles(db, orgId, tournoiId, pouleCtx) {
   phases.push(buildPhase('PF', loserSF1,  loserSF2,  ['SF1', 'SF2']));
 
   // 8. Final places (only when F + PF are both played)
+  // V 2.0.851 — Use saved licences as the source of truth (p1_licence_saved
+  // / p2_licence_saved set by buildPhase). Name lookup falls back to a
+  // direct convocation_poules query when findQualifier returns null
+  // (mirror of the V 2.0.833 pattern for barrage winners). Without these
+  // two fallbacks, an upstream chain break (e.g. SF1 cleared) would leave
+  // the F winner with licence=undefined → empty #1 on the podium.
   let finalPlaces = null;
   const f  = phases.find(ph => ph.phase === 'F');
   const pf = phases.find(ph => ph.phase === 'PF');
   if (f && f.is_played && pf && pf.is_played) {
-    const fOut  = deriveBracketOutcome({ ...f,  p1_licence: f.p1?.licence,  p2_licence: f.p2?.licence });
-    const pfOut = deriveBracketOutcome({ ...pf, p1_licence: pf.p1?.licence, p2_licence: pf.p2?.licence });
+    const fOut  = deriveBracketOutcome({
+      ...f,
+      p1_licence: f.p1?.licence  || f.p1_licence_saved,
+      p2_licence: f.p2?.licence  || f.p2_licence_saved
+    });
+    const pfOut = deriveBracketOutcome({
+      ...pf,
+      p1_licence: pf.p1?.licence || pf.p1_licence_saved,
+      p2_licence: pf.p2?.licence || pf.p2_licence_saved
+    });
     if (fOut && pfOut) {
+      const resolveName = async (lic) => {
+        if (!lic) return null;
+        const norm = String(lic).replace(/\s+/g, '');
+        const q = findQualifier(norm);
+        if (q && q.player_name) return q.player_name;
+        // Fallback: look up directly in convocation_poules
+        return await new Promise((resolve) => {
+          db.get(
+            `SELECT player_name FROM convocation_poules
+              WHERE tournoi_id = $1 AND REPLACE(licence, ' ', '') = $2
+              LIMIT 1`,
+            [tournoiId, norm],
+            (err, r) => resolve(err ? null : (r ? r.player_name : null))
+          );
+        });
+      };
       finalPlaces = [
-        { place: 1, licence: fOut.winner_licence,  name: findQualifier(String(fOut.winner_licence).replace(/\s+/g, ''))?.player_name },
-        { place: 2, licence: fOut.loser_licence,   name: findQualifier(String(fOut.loser_licence).replace(/\s+/g, ''))?.player_name },
-        { place: 3, licence: pfOut.winner_licence, name: findQualifier(String(pfOut.winner_licence).replace(/\s+/g, ''))?.player_name },
-        { place: 4, licence: pfOut.loser_licence,  name: findQualifier(String(pfOut.loser_licence).replace(/\s+/g, ''))?.player_name }
+        { place: 1, licence: fOut.winner_licence,  name: await resolveName(fOut.winner_licence)  },
+        { place: 2, licence: fOut.loser_licence,   name: await resolveName(fOut.loser_licence)   },
+        { place: 3, licence: pfOut.winner_licence, name: await resolveName(pfOut.winner_licence) },
+        { place: 4, licence: pfOut.loser_licence,  name: await resolveName(pfOut.loser_licence)  }
       ];
     }
   }
@@ -5145,14 +5193,27 @@ async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx 
     if (ph && ph.startsWith('EIGHTH')) return 'EIGHTH';
     return null;
   };
+  // V 2.0.851 — Use saved licences as fallback when ph.p1/p2 didn't resolve
+  // (upstream chain break). Without this, F + PF were silently dropped from
+  // the deepest-phase walk if their upstream SF/QF was cleared, leaving the
+  // F winner with no position assignment → no LBIF points.
+  const phaseLicences = (ph) => ({
+    p1: (ph.p1 && ph.p1.licence) || ph.p1_licence_saved || null,
+    p2: (ph.p2 && ph.p2.licence) || ph.p2_licence_saved || null
+  });
   const sortedPhases = (bracketCtx.phases || [])
-    .filter(ph => ph.is_played && ph.p1 && ph.p2)
+    .filter(ph => {
+      if (!ph.is_played) return false;
+      const lics = phaseLicences(ph);
+      return !!(lics.p1 && lics.p2);
+    })
     .sort((a, b) => phaseDepth(b.phase) - phaseDepth(a.phase));
 
   for (const ph of sortedPhases) {
     const family = phaseFamily(ph.phase);
     if (!family) continue;
-    const p1k = normLic(ph.p1.licence), p2k = normLic(ph.p2.licence);
+    const lics = phaseLicences(ph);
+    const p1k = normLic(lics.p1), p2k = normLic(lics.p2);
     const s1 = summary.get(p1k), s2 = summary.get(p2k);
     // Winner / loser by points
     let winnerSummary = null, loserSummary = null;
