@@ -2788,7 +2788,21 @@ router.get('/:id/results', authenticateToken, async (req, res) => {
 
     // Include qualification mode so frontend can choose columns explicitly
     const qualificationMode = orgId ? (await appSettings.getOrgSetting(orgId, 'qualification_mode')) || 'standard' : 'standard';
-    res.json({ tournament, results, bonusColumns, bonusMoyenneInfo, hasMatchData, matchCount, qualificationMode, _bonusDiag: bonusDiag });
+    // V 2.0.863 — Suppress carambole-only payloads for Quilles: the bonus
+    // moyenne machinery (bonusColumns + bonusMoyenneInfo + _bonusDiag) is
+    // computed on every read but never applies to LBIF tournaments.
+    // Returning it makes the API response misleading (the frontend hides
+    // it correctly via V 2.0.859, but anyone inspecting the JSON sees
+    // ghost "+1 applied to 17 players" stats that don't reflect reality).
+    const _gt = String((tournament && tournament.game_type) || '').toUpperCase().trim();
+    const _isQ_results = _gt === '5Q' || _gt === '9Q' || _gt === '5 QUILLES' || _gt === '9 QUILLES';
+    res.json({
+      tournament, results,
+      bonusColumns:    _isQ_results ? [] : bonusColumns,
+      bonusMoyenneInfo: _isQ_results ? null : bonusMoyenneInfo,
+      hasMatchData, matchCount, qualificationMode,
+      _bonusDiag:      _isQ_results ? null : bonusDiag
+    });
   } catch (error) {
     console.error('[RESULTS] Error:', error);
     res.status(500).json({ error: error.message });
