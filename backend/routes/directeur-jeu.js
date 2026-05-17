@@ -1183,10 +1183,19 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
     // Snapshot existing location/time before we wipe, so the new rows can
     // inherit the admin's location_name / location_address / start_time
     // (the DdJ is only editing the poule composition, not the venue).
+    // V 2.0.846 — Also preserve is_checked_in / checked_in_at so the
+    // pointage state survives a re-save of the poule composition.
+    // Previously, going back to the wizard and re-validating the poules
+    // wiped every check-in (the DELETE FROM below dropped the columns),
+    // leaving the DdJ to re-tick every present player. Reported by Jeff
+    // ("when we closed a DdJ session and we come back to it the present
+    // screen is not persistent"). Tied to the per-player licence so a
+    // dropped-then-re-added player keeps their check-in too.
     const snapshotRows = await new Promise((resolve, reject) => {
       db.all(
         `SELECT REPLACE(licence, ' ', '') AS lic_norm,
-                location_name, location_address, start_time
+                location_name, location_address, start_time,
+                is_checked_in, checked_in_at
          FROM convocation_poules
          WHERE tournoi_id = $1`,
         [tournoiId],
@@ -1233,11 +1242,15 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
           || playersInPoule[idx].player_name || rawLicence;
 
         await new Promise((resolve, reject) => {
+          // V 2.0.846 — also carry is_checked_in + checked_in_at across
+          // the DELETE+INSERT so the pointage state survives. Defaults
+          // to FALSE/NULL for new players that weren't in the snapshot.
           db.run(
             `INSERT INTO convocation_poules
                (tournoi_id, poule_number, licence, player_name, club,
-                location_name, location_address, start_time, player_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                location_name, location_address, start_time, player_order,
+                is_checked_in, checked_in_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
             [
               tournoiId,
               pouleNumber,
@@ -1247,7 +1260,10 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
               snap.location_name || null,
               snap.location_address || null,
               snap.start_time || null,
-              idx + 1
+              idx + 1,
+              snap.is_checked_in === true || snap.is_checked_in === 't' || snap.is_checked_in === 1
+                ? true : false,
+              snap.checked_in_at || null
             ],
             (err) => err ? reject(err) : resolve()
           );
@@ -1271,12 +1287,15 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
           || direct_qualifs[idx].player_name || rawLicence;
 
         await new Promise((resolve, reject) => {
+          // V 2.0.846 — same is_checked_in / checked_in_at preservation
+          // as the regular poule INSERT above. Direct qualifiers (LBIF
+          // qualifiés d'office) also go through pointage.
           db.run(
             `INSERT INTO convocation_poules
                (tournoi_id, poule_number, licence, player_name, club,
                 location_name, location_address, start_time, player_order,
-                is_direct_qualif)
-             VALUES ($1, 0, $2, $3, $4, $5, $6, $7, $8, TRUE)`,
+                is_direct_qualif, is_checked_in, checked_in_at)
+             VALUES ($1, 0, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10)`,
             [
               tournoiId,
               rawLicence,
@@ -1285,7 +1304,10 @@ router.put('/competitions/:id/poules', authenticateToken, requireDdJ, async (req
               snap.location_name || null,
               snap.location_address || null,
               snap.start_time || null,
-              idx + 1
+              idx + 1,
+              snap.is_checked_in === true || snap.is_checked_in === 't' || snap.is_checked_in === 1
+                ? true : false,
+              snap.checked_in_at || null
             ],
             (err) => err ? reject(err) : resolve()
           );
