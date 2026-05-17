@@ -427,9 +427,18 @@
           rankingsBtn.href = `rankings.html?categoryId=${data.tournament.category_id}&season=${data.tournament.season}`;
         }
 
-        // Display bonus moyenne info card if applicable
+        // V 2.0.859 — Quilles tournaments don't use reprises / moyenne /
+        // best serie / bonus moyenne (LBIF règlement only awards LBIF
+        // position points). Detect once + hide the carambole-only columns
+        // and the bonus banner below.
+        const _isQ_results = (() => {
+          const m = String((data.tournament && data.tournament.game_type) || '').toUpperCase().trim();
+          return m === '5Q' || m === '9Q' || m === '5 QUILLES' || m === '9 QUILLES';
+        })();
+
+        // Display bonus moyenne info card if applicable (skipped for Quilles)
         const bonusMoyenneInfoDiv = document.getElementById('bonusMoyenneInfo');
-        if (data.bonusMoyenneInfo && data.bonusMoyenneInfo.enabled && bonusMoyenneInfoDiv) {
+        if (!_isQ_results && data.bonusMoyenneInfo && data.bonusMoyenneInfo.enabled && bonusMoyenneInfoDiv) {
           const info = data.bonusMoyenneInfo;
           let rulesHTML = '';
           if (info.type === 'tiered') {
@@ -518,6 +527,14 @@
             headerHTML += '<th style="text-align: center;">MS</th>';
             headerHTML += '<th style="text-align: center;">MGP</th>';
             headerHTML += '<th style="text-align: center;">MPART</th>';
+          } else if (_isQ_results) {
+            // V 2.0.859 — Quilles: minimal carambole-free header. Pts Match
+            // = LBIF position points (25/20/15/...). Points = cumulative
+            // points scored in the tournament's matches (Quilles-relevant
+            // tiebreaker). Reprises / Moyenne / MS / Bonus all hidden.
+            if (hasPouleRank) headerHTML += '<th style="text-align: center;">Clt poule</th>';
+            headerHTML += '<th style="text-align: center;" title="Points LBIF attribués selon la position dans le tournoi">Pts LBIF</th>';
+            headerHTML += '<th style="text-align: center;" title="Total des points marqués dans les matchs">Points</th>';
           } else {
             if (hasPouleRank) headerHTML += '<th style="text-align: center;">Clt poule</th>';
             headerHTML += '<th style="text-align: center;">Pts Match</th>';
@@ -534,7 +551,7 @@
         }
 
         // ── Rendering context for sort toggle ──
-        const renderCtx = { results: data.results, bonusColumns, hasBonusCols, hasPositionPoints, hasPouleRank, hasMPART, hasPM };
+        const renderCtx = { results: data.results, bonusColumns, hasBonusCols, hasPositionPoints, hasPouleRank, hasMPART, hasPM, isQuilles: _isQ_results };
 
         function renderResultRows(sortedResults) {
           const tbody = document.getElementById('resultsBody');
@@ -565,6 +582,27 @@
             const pouleRankHTML = renderCtx.hasPouleRank ? `<td style="text-align: center;">${result.poule_rank || '-'}</td>` : '';
             const pmHTML = renderCtx.hasPM ? `<td style="text-align: center;">${result.parties_menees || '-'}</td>` : '';
             const mpartHTML = renderCtx.hasMPART ? `<td style="text-align: center;">${result.meilleure_partie ? result.meilleure_partie.toFixed(3) : '-'}</td>` : '';
+
+            // V 2.0.859 — Quilles row: minimal columns matching the header.
+            // Pts Match column already holds the LBIF points (set by
+            // /finalize V 2.0.857). Skip all reprises/moyenne/serie fields.
+            if (renderCtx.isQuilles) {
+              const pouleRankCell = renderCtx.hasPouleRank
+                ? `<td style="text-align: center;">${result.poule_rank || '-'}</td>` : '';
+              row.innerHTML = `
+                <td style="text-align: center; font-weight: bold;">${index + 1}</td>
+                <td>${result.licence}</td>
+                <td><a href="player-history.html?licence=${result.licence}" class="player-link">${playerName}</a></td>
+                <td></td>
+                ${pouleRankCell}
+                <td style="text-align: center; font-weight: bold; color: #c8102e;">${result.match_points}</td>
+                <td style="text-align: center;">${result.points ?? 0}</td>
+              `;
+              const clubCellQ = row.cells[3];
+              clubCellQ.innerHTML = getClubLogoHTML(result.club_name);
+              tbody.appendChild(row);
+              return; // skip the carambole branches below for this row
+            }
 
             if (renderCtx.hasPositionPoints) {
               const bonusVal = totalBonus;
