@@ -4856,12 +4856,15 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
     }
 
     // Overall classement: bracket 1-4 + consolante 5+
-    // V 2.0.865 — Single-poule mode (N < single_poule_threshold) has no
-    // bracket / consolante — the poule classement IS the final standings.
-    // Build overall from the single poule's classement so the recap page
-    // (and the "X joueur(s) seront enregistrés" preview in the validation
-    // modal) shows the correct count instead of 0.
-    const overall = (pouleCtx.mode === 'single_poule')
+    // V 2.0.865 / V 2.0.866 — "No-bracket" tournaments use the poule
+    // classement as the final standings. Covers carambole N <
+    // single_poule_threshold AND Quilles N < 12 (LBIF règlement,
+    // single_poule_fallback). Without this, overall is empty and the
+    // validation modal shows "0 joueur(s) seront enregistrés".
+    const _noBracket = pouleCtx.mode === 'single_poule'
+                    || bracketCtx.mode === 'single_poule'
+                    || (bracketCtx.bracket_size === 0 && (!bracketCtx.phases || bracketCtx.phases.length === 0));
+    const overall = _noBracket
       ? (((pouleCtx.poules || [])[0]?.classement) || []).map((row, idx) => ({
           place: idx + 1,
           licence: row.licence,
@@ -5705,12 +5708,17 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
     if (!allPoulesDone) {
       return res.status(409).json({ error: 'Tous les matchs de poule doivent être terminés avant de valider.' });
     }
-    // V 2.0.865 — Single-poule tournaments (N < single_poule_threshold, e.g.
-    // 5 inscrits) skip the bracket + consolante entirely. The single poule's
-    // classement IS the final standings, so we only require the poule
-    // matches to be done (checked above). For carambole multi-poule and
-    // Quilles, the bracket + consolante gates still apply.
-    const isSinglePoule = (pouleCtx.mode === 'single_poule');
+    // V 2.0.865 / V 2.0.866 — "No-bracket" detection covers three real cases:
+    //   1. Carambole N < single_poule_threshold (default 6) → pouleCtx.mode='single_poule'
+    //   2. Quilles N < 12 → bracketCtx.bracket_size = 0 (LBIF single_poule_fallback)
+    //   3. Quilles bracketCtx.mode === 'single_poule' (legacy edge case)
+    // In any of these, the single poule's classement IS the final standings.
+    // We only require the poule matches to be done (checked above). For the
+    // standard multi-poule + bracket flow, the bracket + consolante gates
+    // still apply unchanged.
+    const isSinglePoule = pouleCtx.mode === 'single_poule'
+                       || bracketCtx.mode === 'single_poule'
+                       || (bracketCtx.bracket_size === 0 && (!bracketCtx.phases || bracketCtx.phases.length === 0));
     if (!isSinglePoule) {
       if (!bracketCtx.final_places || bracketCtx.final_places.length === 0) {
         return res.status(409).json({ error: 'Le tableau final doit être terminé (Finale + Petite finale).' });
