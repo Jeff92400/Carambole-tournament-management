@@ -5828,7 +5828,7 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
     }
 
     // ---- Resolve category + season ----------------------------------------
-    const categoryRow = await new Promise((resolve, reject) => {
+    let categoryRow = await new Promise((resolve, reject) => {
       db.get(
         `SELECT id FROM categories
          WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
@@ -5839,6 +5839,39 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
         (err, row) => err ? reject(err) : resolve(row)
       );
     });
+    // V 2.0.858 — Quilles tournaments don't have FFB levels (everyone plays
+    // OPEN regardless of classification). The categories table is seeded
+    // for carambole disciplines only — Quilles categories don't exist by
+    // default. Auto-provision the row on first finalize so the user doesn't
+    // have to pre-configure anything. Idempotent: subsequent finalizes
+    // will find the row.
+    if (!categoryRow && tournamentIsQuilles) {
+      const displayName = `${(t.mode || '').toUpperCase()} ${(t.categorie || 'OPEN').toUpperCase()}`.trim();
+      try {
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO categories (game_type, level, display_name, is_active, organization_id)
+             VALUES ($1, $2, $3, TRUE, $4)
+             ON CONFLICT (game_type, level, organization_id) DO NOTHING`,
+            [(t.mode || '').toUpperCase(), (t.categorie || 'OPEN').toUpperCase(), displayName, orgId],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+        categoryRow = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT id FROM categories
+             WHERE UPPER(REPLACE(game_type, ' ', '')) = UPPER(REPLACE($1, ' ', ''))
+               AND UPPER(level) = UPPER($2)
+               AND ($3::int IS NULL OR organization_id = $3)
+             LIMIT 1`,
+            [t.mode || '', t.categorie || '', orgId],
+            (err, row) => err ? reject(err) : resolve(row)
+          );
+        });
+      } catch (e) {
+        console.error('[/finalize] Quilles category auto-create failed:', e.message);
+      }
+    }
     if (!categoryRow) {
       return res.status(400).json({
         error: `Catégorie introuvable dans la table categories : ${t.mode} / ${t.categorie}`
