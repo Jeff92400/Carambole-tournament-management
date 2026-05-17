@@ -1844,7 +1844,18 @@ async function loadPouleMatches(db, orgId, tournoiId) {
         entered_at: saved ? saved.entered_at : null,
         started_at: saved ? saved.started_at : null,
         finished_at: saved ? saved.finished_at : null,
-        is_played: saved && saved.p1_points != null && saved.p2_points != null
+        // V 2.0.840 — was "both scores entered" which made intermediate
+        // saves flip the UI to "Match terminé" and the TV ✓ icon. Now
+        // uses the same truly-finished test as the save endpoint so the
+        // front-end label, the TV deriveStatus, and the workflow gates
+        // all agree on "intermediate score → still in progress".
+        is_played: !!(saved
+          && saved.p1_points != null
+          && saved.p2_points != null
+          && isMatchTrulyFinished(
+              { p1_points: saved.p1_points, p1_reprises: saved.p1_reprises,
+                p2_points: saved.p2_points, p2_reprises: saved.p2_reprises },
+              gameParams))
       };
       // Convenience: derive match points + outcome for UI
       const mp = computeMatchPoints(m.p1_points, m.p2_points, settings);
@@ -2469,7 +2480,14 @@ async function loadBracket(db, orgId, tournoiId) {
       // V 2.0.707 — expose persisted referee for UI pre-fill
       referee_name: saved ? saved.referee_name : null,
       referee_licence: saved ? saved.referee_licence : null,
-      is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
+      // V 2.0.840 — truly-finished test (see helper top of file).
+      is_played: !!(saved
+        && saved.p1_points != null
+        && saved.p2_points != null
+        && isMatchTrulyFinished(
+            { p1_points: saved.p1_points, p1_reprises: saved.p1_reprises,
+              p2_points: saved.p2_points, p2_reprises: saved.p2_reprises },
+            ctx.game_params)),
       entered_at: saved ? saved.entered_at : null,
       started_at: saved ? saved.started_at : null,
       finished_at: saved ? saved.finished_at : null
@@ -2868,7 +2886,14 @@ async function loadBracketQuilles(db, orgId, tournoiId, pouleCtx) {
       p2_points_subis: saved ? saved.p2_points_subis : null,
       referee_name: saved ? saved.referee_name : null,
       referee_licence: saved ? saved.referee_licence : null,
-      is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
+      // V 2.0.840 — truly-finished test (see helper top of file).
+      is_played: !!(saved
+        && saved.p1_points != null
+        && saved.p2_points != null
+        && isMatchTrulyFinished(
+            { p1_points: saved.p1_points, p1_reprises: saved.p1_reprises,
+              p2_points: saved.p2_points, p2_reprises: saved.p2_reprises },
+            pouleCtx.game_params)),
       entered_at: saved ? saved.entered_at : null,
       started_at: saved ? saved.started_at : null,
       finished_at: saved ? saved.finished_at : null,
@@ -4264,7 +4289,14 @@ async function loadConsolante(db, orgId, tournoiId) {
       // V 2.0.707 — expose persisted referee for UI pre-fill
       referee_name: saved ? saved.referee_name : null,
       referee_licence: saved ? saved.referee_licence : null,
-      is_played: !!(saved && saved.p1_points != null && saved.p2_points != null),
+      // V 2.0.840 — truly-finished test (see helper top of file).
+      is_played: !!(saved
+        && saved.p1_points != null
+        && saved.p2_points != null
+        && isMatchTrulyFinished(
+            { p1_points: saved.p1_points, p1_reprises: saved.p1_reprises,
+              p2_points: saved.p2_points, p2_reprises: saved.p2_reprises },
+            bracketCtx.game_params)),
       entered_at: saved ? saved.entered_at : null,
       started_at: saved ? saved.started_at : null,
       finished_at: saved ? saved.finished_at : null,
