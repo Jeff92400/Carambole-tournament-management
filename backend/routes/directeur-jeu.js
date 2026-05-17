@@ -5200,13 +5200,23 @@ async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx 
     if (ph && ph.startsWith('EIGHTH')) return 'EIGHTH';
     return null;
   };
-  // V 2.0.851 — Use saved licences as fallback when ph.p1/p2 didn't resolve
-  // (upstream chain break). Without this, F + PF were silently dropped from
-  // the deepest-phase walk if their upstream SF/QF was cleared, leaving the
-  // F winner with no position assignment → no LBIF points.
+  // V 2.0.853 — PREFER saved licences over the resolved player objects.
+  // Critical alignment fix: ph.p1_points / ph.p2_points are read from
+  // saved.p1_points / saved.p2_points, which means they correspond to
+  // saved.p1_licence / saved.p2_licence — NOT necessarily to ph.p1.licence /
+  // ph.p2.licence, which my seedPairs logic can order differently.
+  //
+  // Observed in production V 2.0.852: QF1 saved row had p1=Eric (99 pts),
+  // p2=David (93 pts), but seedPairs put David as ph.p1. Using ph.p1.licence
+  // with ph.p1_points = 99 made my code mark David as the QF1 winner.
+  // Eric kept his '1st' position via final_place, but David got no position
+  // and was silently dropped from the LBIF classement.
+  //
+  // V 2.0.851 was the previous fallback (the other direction) — still in
+  // place for the case where saved data is genuinely missing.
   const phaseLicences = (ph) => ({
-    p1: (ph.p1 && ph.p1.licence) || ph.p1_licence_saved || null,
-    p2: (ph.p2 && ph.p2.licence) || ph.p2_licence_saved || null
+    p1: ph.p1_licence_saved || (ph.p1 && ph.p1.licence) || null,
+    p2: ph.p2_licence_saved || (ph.p2 && ph.p2.licence) || null
   });
   const sortedPhases = (bracketCtx.phases || [])
     .filter(ph => {
@@ -5249,8 +5259,17 @@ async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx 
     if (!family) continue;
     const lics = phaseLicences(ph);
     const p1k = normLic(lics.p1), p2k = normLic(lics.p2);
-    const s1 = ensureInSummary(p1k, ph.p1);
-    const s2 = ensureInSummary(p2k, ph.p2);
+    // V 2.0.853 — Match source player by licence (since ph.p1 / ph.p2 may
+    // be in different order than the saved row). Falls back to either
+    // player object if no match — name will be a generic 'Joueur' for the
+    // synthetic entry, but the points still get credited correctly.
+    const findInPhase = (norm) => {
+      if (ph.p1 && normLic(ph.p1.licence) === norm) return ph.p1;
+      if (ph.p2 && normLic(ph.p2.licence) === norm) return ph.p2;
+      return null;
+    };
+    const s1 = ensureInSummary(p1k, findInPhase(p1k));
+    const s2 = ensureInSummary(p2k, findInPhase(p2k));
     // Winner / loser by points
     let winnerSummary = null, loserSummary = null;
     if (ph.p1_points > ph.p2_points) { winnerSummary = s1; loserSummary = s2; }
