@@ -621,6 +621,38 @@
   setInterval(tickClock, 1000);
   tickClock();
 
+  // V 2.0.843 — Keep the TV screen awake via the Screen Wake Lock API.
+  // The host PC's "écran de veille" / power-save would otherwise turn
+  // the display off after a few minutes of no input, which is exactly
+  // what happens during a tournament (nobody touches the TV's keyboard).
+  // The wake lock survives as long as the tab is visible; when the user
+  // switches tabs or minimizes, the OS releases it automatically — we
+  // re-acquire on visibilitychange so it's restored when they come back.
+  // Silently no-ops on browsers without the API (older Firefox/Safari).
+  let wakeLockSentinel = null;
+  async function acquireWakeLock() {
+    try {
+      if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+        wakeLockSentinel.addEventListener('release', () => {
+          // Auto-released by the OS — we'll try again on next visibility.
+          wakeLockSentinel = null;
+        });
+        console.log('[dj-public] Screen wake lock acquired');
+      }
+    } catch (err) {
+      // Permission denied / browser refused — non-fatal. The TV will
+      // simply fall back to whatever the host PC's power settings dictate.
+      console.warn('[dj-public] wake lock unavailable:', err && err.message);
+    }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !wakeLockSentinel) {
+      acquireWakeLock();
+    }
+  });
+  acquireWakeLock();
+
   if (!Number.isFinite(tournoiId)) {
     $('t-main').innerHTML = '<div class="error">URL invalide. Format attendu : /dj-public.html?id=&lt;tournoiId&gt;</div>';
   } else {
