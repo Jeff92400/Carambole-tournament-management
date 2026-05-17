@@ -4422,10 +4422,21 @@ function aggregateMatchResults(matches) {
 function isClassificationPoule(pouleName) {
   const upper = pouleName.toUpperCase();
   return upper.includes('CLASSEMENT') || upper.includes('DEMI-FINALE') || upper.includes('DEMI FINALE') ||
-      upper.includes('FINALE') || upper.includes('PETITE FINALE') ||
+      // V 2.0.867 — match FINAL with OR without trailing E. Excel narrow
+      // columns truncate the display of "PETITE FINALE" to "PETITE FINAL"
+      // when files are opened in Excel before upload (production case
+      // observed: TP2 import). Using \bFINAL\b would be safer but
+      // 'includes' is consistent with neighbouring checks and false
+      // positives like "FINAL ROUND" don't appear in E2i CSV.
+      upper.includes('FINAL') ||
       upper.includes('SEMI-FINAL') || upper.includes('BARRAGE') ||
       /\bPLACES?\b/.test(upper) ||
-      /^G\s*\d+-\d+/.test(pouleName) || /^\d{2}-\d{2}$/.test(pouleName);
+      /^G\s*\d+-\d+/.test(pouleName) || /^\d{2}-\d{2}$/.test(pouleName) ||
+      // V 2.0.867 — cross-match patterns like "5 vs G6-7" or "1 VS 8" used
+      // by E2i for placement matches between specific seeds. Without this
+      // they were treated as regular poules and inflated poule totals.
+      /\bVS\b/.test(upper) ||
+      /^\d+\s*-\s*\d+$/.test(pouleName);
 }
 
 /**
