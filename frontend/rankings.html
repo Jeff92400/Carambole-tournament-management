@@ -469,6 +469,16 @@
     // Render rankings table (called with viewMode 'season' or 'finale')
     function renderRankings(data, viewMode) {
       const rankings = data.rankings || [];
+      // V 2.0.862 — Quilles detection (re-computed here because the V 2.0.860
+      // `_isQ_rankings` was scoped to loadRankings() only — renderRankings is
+      // a separate function called from multiple paths, so it never saw the
+      // outer variable. Pulled from rankings[0].game_type via the JOIN with
+      // categories. Empty rankings → defaults to carambole layout (matches
+      // pre-Quilles behaviour).
+      const _isQ_rankings = (() => {
+        const m = String((rankings[0] && rankings[0].game_type) || '').toUpperCase().trim();
+        return m === '5Q' || m === '9Q' || m === '5 QUILLES' || m === '9 QUILLES';
+      })();
       const tournamentsPlayed = data.tournamentsPlayed || { t1: false, t2: false, t3: false };
       const tournamentIds = data.tournamentIds || {};
       const bonusColumns = data.bonusColumns || [];
