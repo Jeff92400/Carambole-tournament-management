@@ -6011,19 +6011,25 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
     // via bracket); recalcPositions promoted him to 3rd, breaking the
     // alignment with E2i. Bonuses + rankings recalcs after this point
     // already preserve existing positions when bracket data is detected.
-    // V 2.0.857 — Skip carambole-only recalcBonuses + recalcRankings for
-    // Quilles. Both helpers use moyenne / best_serie / bonus_moyenne which
-    // are nulled out for Quilles, and they'd recompute a meaningless season
-    // ranking. A Quilles-specific season ranking (cumulative LBIF points
-    // across the season's tournaments) is a separate piece of work.
-    if (!tournamentIsQuilles) {
+    // V 2.0.860 — For Quilles, skip recalcBonuses (it'd add phantom +1
+    // bonuses from the moyenne thresholds — since Quilles moyenne is 0,
+    // every player would fall in the lowest tier) but DO run recalcRankings.
+    // The standard rankings query does SUM(tr.match_points), and Quilles
+    // stores LBIF points (25/20/15/...) as match_points (V 2.0.857), so the
+    // season ranking aggregates the right thing. avg_moyenne / best_serie
+    // come out 0/null for Quilles — harmless because the ORDER BY uses
+    // total_match_points DESC as the primary key.
+    if (tournamentIsQuilles) {
+      await new Promise((resolve) => {
+        recalcRankings(categoryId, season, () => resolve());
+      });
+      console.log('[/finalize] Quilles tournament — recalcRankings run, recalcBonuses skipped');
+    } else {
       await new Promise((resolve) => {
         recalcBonuses(categoryId, season, orgId, () => {
           recalcRankings(categoryId, season, () => resolve());
         });
       });
-    } else {
-      console.log('[/finalize] Quilles tournament — skipped carambole recalcBonuses/recalcRankings');
     }
 
     // ---- Audit log --------------------------------------------------------

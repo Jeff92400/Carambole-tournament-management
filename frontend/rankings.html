@@ -389,9 +389,17 @@
           return;
         }
 
-        // Display bonus moyenne info card if applicable
+        // V 2.0.860 — Quilles detection. game_type comes through on every
+        // ranking row (JOIN with categories). Hides the carambole-only
+        // bonus banner + columns when the season is a Quilles season.
+        const _isQ_rankings = (() => {
+          const m = String((rankings[0] && rankings[0].game_type) || '').toUpperCase().trim();
+          return m === '5Q' || m === '9Q' || m === '5 QUILLES' || m === '9 QUILLES';
+        })();
+
+        // Display bonus moyenne info card if applicable (hidden for Quilles)
         const bonusMoyenneInfoDiv = document.getElementById('bonusMoyenneInfo');
-        if (data.bonusMoyenneInfo && data.bonusMoyenneInfo.enabled && bonusMoyenneInfoDiv) {
+        if (!_isQ_rankings && data.bonusMoyenneInfo && data.bonusMoyenneInfo.enabled && bonusMoyenneInfoDiv) {
           const info = data.bonusMoyenneInfo;
           let rulesHTML = '';
           if (info.type === 'tiered') {
@@ -698,7 +706,21 @@
         // --- STANDARD MODE (unchanged) ---
 
         // Always update header row to include tournament links + bonus columns
-        document.getElementById('rankingsHeaderRow').innerHTML = `
+        // V 2.0.860 — Quilles header: skip Pts Match (== Total for Quilles),
+        // bonus cols, Total Points, Total Reprises, Moyenne, Meilleure Série.
+        // Each T1/T2/T3 cell shows the player's LBIF points for that tournoi;
+        // Total column sums them across the season.
+        document.getElementById('rankingsHeaderRow').innerHTML = _isQ_rankings
+          ? `
+            <th>Position</th>
+            <th>Licence</th>
+            <th>Joueur</th>
+            <th>Club</th>
+            <th title="Points LBIF marqués au tournoi T1">${tournamentHeaderLink('T1', 1)}</th>
+            <th title="Points LBIF marqués au tournoi T2">${tournamentHeaderLink('T2', 2)}</th>
+            <th title="Points LBIF marqués au tournoi T3">${tournamentHeaderLink('T3', 3)}</th>
+            <th title="Total cumulé des points LBIF sur la saison">Total LBIF</th>`
+          : `
             <th>Position</th>
             <th>Licence</th>
             <th>Joueur</th>
@@ -765,7 +787,23 @@
             });
           }
 
-          row.innerHTML = `
+          // V 2.0.860 — Quilles row matches the simplified header above:
+          // T1/T2/T3 are LBIF points per tournament (stored as match_points
+          // by /finalize V 2.0.857), Total LBIF is the season cumulative.
+          row.innerHTML = _isQ_rankings ? `
+            <td style="text-align: center; font-weight: bold;">${rank.rank_position}</td>
+            <td>${rank.licence}</td>
+            <td>
+              <a href="player-history.html?licence=${rank.licence}" class="player-link">
+                ${rank.first_name} ${rank.last_name}
+              </a>
+            </td>
+            <td></td>
+            <td style="text-align: center;">${formatTP(rank.tournament_1_points, tournamentsPlayed.t1, 1)}</td>
+            <td style="text-align: center;">${formatTP(rank.tournament_2_points, tournamentsPlayed.t2, 2)}</td>
+            <td style="text-align: center;">${formatTP(rank.tournament_3_points, tournamentsPlayed.t3, 3)}</td>
+            <td style="text-align: center; font-weight: bold; color: #c8102e;">${rank.total_match_points}</td>
+          ` : `
             <td style="text-align: center; font-weight: bold;">${rank.rank_position}</td>
             <td>${rank.licence}</td>
             <td>
