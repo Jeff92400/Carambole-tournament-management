@@ -227,11 +227,19 @@
   .match-row.finished { color: var(--muted); }
   .match-row.pending { color: var(--text); }
   .match-row.in_progress {
+    /* V 2.0.848 — In-progress matches stand out more without changing
+       the row height (preserves layout on busy days like a full LBIF
+       day with 5 poules + barrage + bracket). Achieved with: thicker
+       red left bar, slightly larger text, brighter background, and a
+       stronger pulse glow. No vertical padding bump → no cascading
+       shift on rows below. */
     background: var(--bg-card-busy);
     border: 1px solid var(--border-busy);
+    border-left: 5px solid var(--score-red, #ff4d4d);
     color: var(--text);
-    font-weight: 700;
-    animation: pulse 2s ease-in-out infinite;
+    font-weight: 800;
+    font-size: 1.05em;
+    animation: pulse 1.6s ease-in-out infinite;
   }
   .match-row .icon {
     font-size: 1em;
@@ -259,20 +267,34 @@
   }
   .match-row.in_progress .ptable { color: var(--score-red); }
   .live-badge {
+    /* V 2.0.848 — Bigger, brighter LIVE pill with a leading red dot.
+       Still compact enough to fit on a single line, but actually reads
+       as "watch this match" on a 50-inch TV across the room. */
     display: inline-block;
-    background: var(--border-busy);
+    background: var(--score-red, #ff4d4d);
     color: white;
-    font-size: 0.75em;
-    padding: 1px 6px;
-    border-radius: 8px;
+    font-size: 0.95em;
+    padding: 2px 10px;
+    border-radius: 10px;
     font-weight: 800;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
     margin-left: 4px;
+    box-shadow: 0 0 0 1px rgba(255, 77, 77, 0.35);
+  }
+  .live-badge::before {
+    content: '●';
+    color: #fff;
+    margin-right: 4px;
+    animation: blink 1s ease-in-out infinite;
   }
 
   @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.4); }
-    50%      { box-shadow: 0 0 12px 2px rgba(255, 77, 77, 0.55); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.5); }
+    50%      { box-shadow: 0 0 18px 4px rgba(255, 77, 77, 0.7); }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
   }
 
   /* ---- BRACKET (Roland-Garros style) ---- */
