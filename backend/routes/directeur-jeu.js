@@ -131,6 +131,72 @@ function isMatchTrulyFinished(parsed, gp) {
   }
 })();
 
+// V 2.0.847 — One-shot heal for the OTHER side of the pointage data:
+// re-stamp is_checked_in = TRUE for any convocation_poules row whose
+// player actually played at least one match (poule, bracket or
+// consolante). Before V 2.0.846, re-saving the poule composition
+// wiped is_checked_in; this restores the implicit "if they played,
+// they were present" truth for already-completed sessions so the
+// Pointage screen no longer shows them as "À pointer" on revisit.
+// Idempotent — a player without any match stays uncheck.
+(async function healLostCheckIns() {
+  try {
+    const db = getDb();
+    await new Promise((resolve) => {
+      db.run(
+        `UPDATE convocation_poules cp
+            SET is_checked_in = TRUE,
+                checked_in_at = COALESCE(cp.checked_in_at, CURRENT_TIMESTAMP)
+          WHERE (cp.is_checked_in IS DISTINCT FROM TRUE)
+            AND EXISTS (
+              SELECT 1 FROM ddj_poule_matches m
+               WHERE m.tournoi_id = cp.tournoi_id
+                 AND (REPLACE(m.p1_licence, ' ', '') = REPLACE(cp.licence, ' ', '')
+                   OR REPLACE(m.p2_licence, ' ', '') = REPLACE(cp.licence, ' ', ''))
+            )`,
+        [],
+        function (err) {
+          if (err) {
+            console.warn('[DdJ heal checkins/poule]', err.message);
+          } else if (this && this.changes > 0) {
+            console.log(`[DdJ heal] restored is_checked_in on ${this.changes} convocation_poules row(s) (via poule matches)`);
+          }
+          resolve();
+        }
+      );
+    });
+    // Same backfill, scoped through bracket + consolante. Tables may not
+    // exist on a fresh install — non-fatal in both cases.
+    for (const tbl of ['ddj_bracket_matches', 'ddj_consolante_matches']) {
+      await new Promise((resolve) => {
+        db.run(
+          `UPDATE convocation_poules cp
+              SET is_checked_in = TRUE,
+                  checked_in_at = COALESCE(cp.checked_in_at, CURRENT_TIMESTAMP)
+            WHERE (cp.is_checked_in IS DISTINCT FROM TRUE)
+              AND EXISTS (
+                SELECT 1 FROM ${tbl} m
+                 WHERE m.tournoi_id = cp.tournoi_id
+                   AND (REPLACE(m.p1_licence, ' ', '') = REPLACE(cp.licence, ' ', '')
+                     OR REPLACE(m.p2_licence, ' ', '') = REPLACE(cp.licence, ' ', ''))
+              )`,
+          [],
+          function (err) {
+            if (err) {
+              console.warn(`[DdJ heal checkins/${tbl}]`, err.message);
+            } else if (this && this.changes > 0) {
+              console.log(`[DdJ heal] restored is_checked_in on ${this.changes} more row(s) (via ${tbl})`);
+            }
+            resolve();
+          }
+        );
+      });
+    }
+  } catch (e) {
+    console.warn('[DdJ heal checkins] skipped:', e?.message || e);
+  }
+})();
+
 // GET /api/directeur-jeu/competitions
 // Returns tournaments for today + recent days for the DdJ's organization
 router.get('/competitions', authenticateToken, requireDdJ, (req, res) => {
