@@ -5653,6 +5653,35 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
   }
 
   try {
+    // V 2.0.857 — Defensive migration. The V 2.0.799 hotfix that adds
+    // p1_points_subis / p2_points_subis to the three match tables didn't
+    // apply on production for one of them (observed: "column
+    // p1_points_subis does not exist" on /finalize). Run idempotent
+    // ALTER TABLE here so the column is guaranteed before any SELECT.
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(
+          `DO $$ BEGIN
+             IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ddj_poule_matches') THEN
+               ALTER TABLE ddj_poule_matches ADD COLUMN IF NOT EXISTS p1_points_subis INTEGER;
+               ALTER TABLE ddj_poule_matches ADD COLUMN IF NOT EXISTS p2_points_subis INTEGER;
+             END IF;
+             IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ddj_bracket_matches') THEN
+               ALTER TABLE ddj_bracket_matches ADD COLUMN IF NOT EXISTS p1_points_subis INTEGER;
+               ALTER TABLE ddj_bracket_matches ADD COLUMN IF NOT EXISTS p2_points_subis INTEGER;
+             END IF;
+             IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='ddj_consolante_matches') THEN
+               ALTER TABLE ddj_consolante_matches ADD COLUMN IF NOT EXISTS p1_points_subis INTEGER;
+               ALTER TABLE ddj_consolante_matches ADD COLUMN IF NOT EXISTS p2_points_subis INTEGER;
+             END IF;
+           END $$;`,
+          [], (err) => err ? reject(err) : resolve()
+        );
+      });
+    } catch (e) {
+      console.warn('[/finalize] defensive points_subis migration failed:', e.message);
+    }
+
     // ---- Load full state ---------------------------------------------------
     const pouleCtx = await loadPouleMatches(db, orgId, tournoiId);
     if (pouleCtx.error) return res.status(pouleCtx.status || 500).json({ error: pouleCtx.error });
@@ -5755,21 +5784,31 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       s2.matches_played++;
     };
 
+    // V 2.0.857 — Quilles: relax is_played gate (matches the V 2.0.856 fix
+    // for LBIF classement). For Quilles, a match counts as played whenever
+    // both scores are present and differ — no need to hit the distance.
+    // Carambole keeps strict is_played semantics.
+    const isPlayedForFinalize = (m) => {
+      if (tournamentIsQuilles) {
+        return m.p1_points != null && m.p2_points != null && m.p1_points !== m.p2_points;
+      }
+      return !!m.is_played;
+    };
     // Poule matches (flat shape: m.p1_licence / m.p1_name)
     for (const poule of (pouleCtx.poules || [])) {
       for (const m of (poule.matches || [])) {
-        if (!m.is_played) continue;
+        if (!isPlayedForFinalize(m)) continue;
         addMatch(m.p1_licence, m.p1_name, m.p2_licence, m.p2_name, m, false);
       }
     }
     // Bracket matches (nested shape: m.p1.licence)
     for (const ph of (bracketCtx.phases || [])) {
-      if (!ph.is_played) continue;
+      if (!isPlayedForFinalize(ph)) continue;
       addMatch(ph.p1?.licence, ph.p1?.player_name, ph.p2?.licence, ph.p2?.player_name, ph, true);
     }
     // Consolante matches (skip byes — no score was entered)
     for (const ph of (consolanteCtx.phases || [])) {
-      if (!ph.is_played || ph.has_bye) continue;
+      if (!isPlayedForFinalize(ph) || ph.has_bye) continue;
       addMatch(ph.p1?.licence, ph.p1?.player_name, ph.p2?.licence, ph.p2?.player_name, ph, true);
     }
 
@@ -5873,6 +5912,25 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       });
     }
 
+    // V 2.0.857 — For Quilles: compute LBIF position points per player and
+    // override match_points with the LBIF value. The season ranking can then
+    // sum cumulative LBIF points (25/20/15/11/8/5/3/1) across tournaments
+    // exactly like LBIF règlement chap 1.1.1.G / 3.1.G. Without this,
+    // tournament_results.match_points would hold the raw poule-match points
+    // which don't reflect the tournament outcome at all.
+    let lbifPtsByLic = new Map();
+    if (tournamentIsQuilles) {
+      try {
+        const lbifList = await buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx });
+        for (const row of (lbifList || [])) {
+          const k = String(row.licence || '').replace(/\s+/g, '').toUpperCase();
+          if (k) lbifPtsByLic.set(k, row.points || 0);
+        }
+      } catch (e) {
+        console.warn('[/finalize] buildLbifClassement failed, falling back to raw match_points:', e.message);
+      }
+    }
+
     let inserted = 0;
     for (const stats of statsByLic.values()) {
       // V 2.0.798 — Sprint 2 D.5: for Quilles, store points_subis (cumulative
@@ -5885,6 +5943,12 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
       const serieValue = tournamentIsQuilles ? null : stats.best_serie;
       const meilleurePartie = tournamentIsQuilles ? null : (stats.best_match_moyenne || null);
       const position = placeByLicence.get(stats.licence) || 0;
+      // V 2.0.857 — Quilles: store LBIF position points as match_points so
+      // the season ranking aggregates the correct cumulative total. Fall
+      // back to raw match_points if buildLbifClassement couldn't resolve.
+      const matchPointsForStore = tournamentIsQuilles
+        ? (lbifPtsByLic.has(stats.licence) ? lbifPtsByLic.get(stats.licence) : stats.match_points)
+        : stats.match_points;
       await new Promise((resolve, reject) => {
         db.run(
           `INSERT INTO tournament_results
@@ -5893,7 +5957,7 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
               points_subis)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [tournamentId, stats.licence, stats.player_name, position,
-            stats.match_points, moyenne, serieValue, stats.points,
+            matchPointsForStore, moyenne, serieValue, stats.points,
             reprisesValue, stats.poule_rank, meilleurePartie,
             tournamentIsQuilles ? stats.points_subis : null],
           (err) => err ? reject(err) : resolve()
@@ -5914,11 +5978,20 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
     // via bracket); recalcPositions promoted him to 3rd, breaking the
     // alignment with E2i. Bonuses + rankings recalcs after this point
     // already preserve existing positions when bracket data is detected.
-    await new Promise((resolve) => {
-      recalcBonuses(categoryId, season, orgId, () => {
-        recalcRankings(categoryId, season, () => resolve());
+    // V 2.0.857 — Skip carambole-only recalcBonuses + recalcRankings for
+    // Quilles. Both helpers use moyenne / best_serie / bonus_moyenne which
+    // are nulled out for Quilles, and they'd recompute a meaningless season
+    // ranking. A Quilles-specific season ranking (cumulative LBIF points
+    // across the season's tournaments) is a separate piece of work.
+    if (!tournamentIsQuilles) {
+      await new Promise((resolve) => {
+        recalcBonuses(categoryId, season, orgId, () => {
+          recalcRankings(categoryId, season, () => resolve());
+        });
       });
-    });
+    } else {
+      console.log('[/finalize] Quilles tournament — skipped carambole recalcBonuses/recalcRankings');
+    }
 
     // ---- Audit log --------------------------------------------------------
     try {

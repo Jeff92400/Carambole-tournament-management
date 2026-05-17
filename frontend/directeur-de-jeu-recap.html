@@ -416,7 +416,14 @@
               (positions, match points, moyennes, bonus, classements).
             </p>
             <p style="margin:0 0 10px 0;line-height:1.5;font-size:0.9em;color:#555;">
-              👥 <strong>${(data.overall_classement || []).length} joueur(s)</strong> seront enregistrés. Vous serez ensuite redirigé vers la page des résultats officiels.
+              👥 <strong>${
+                // V 2.0.857 — For Quilles, ALL participants get a row
+                // (lbif_classement); for carambole, only the bracket +
+                // consolante final places (overall_classement).
+                isQuilles
+                  ? (data.lbif_classement || []).length
+                  : (data.overall_classement || []).length
+              } joueur(s)</strong> seront enregistrés. Vous serez ensuite redirigé vers la page des résultats officiels.
             </p>
             <p style="margin:0 0 16px 0;font-size:0.85em;color:#777;">
               ℹ️ Vous pourrez re-valider à tout moment (après une correction de score par exemple) — les résultats existants seront alors remplacés par les nouveaux. Aucun risque de doublon.
