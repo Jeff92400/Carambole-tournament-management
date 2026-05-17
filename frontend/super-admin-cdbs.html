@@ -889,13 +889,22 @@
         const missingHtml = (data.missing || []).length
           ? `<div style="margin-top:8px;font-size:12px;color:#888;">Absents du fichier FFB : <code>${data.missing.join(', ')}</code></div>`
           : '';
+        const errorsHtml = (data.error_details || []).length
+          ? `<details style="margin-top:8px;font-size:12px;"><summary style="cursor:pointer;color:#c62828;font-weight:600;">Détails des erreurs (${data.error_details.length})</summary>
+              <table style="width:100%;margin-top:8px;border-collapse:collapse;font-size:11px;">
+                <thead><tr style="background:#f5f5f5;"><th style="text-align:left;padding:4px 6px;">Licence</th><th style="text-align:left;padding:4px 6px;">Déjà dans</th><th style="text-align:left;padding:4px 6px;">Message</th></tr></thead>
+                <tbody>${data.error_details.map(e => `<tr style="border-top:1px solid #eee;"><td style="padding:4px 6px;"><code>${e.licence}</code></td><td style="padding:4px 6px;color:#1565c0;">${e.existing_in_org || '—'}</td><td style="padding:4px 6px;color:#666;">${e.message}</td></tr>`).join('')}</tbody>
+              </table></details>`
+          : '';
+        const bg = data.errors > 0 ? '#fff3e0' : '#e8f5e9';
         resultEl.innerHTML = `
-          <div style="background:#e8f5e9;padding:12px;border-radius:6px;">
+          <div style="background:${bg};padding:12px;border-radius:6px;">
             <strong>Import terminé pour ${data.organization}</strong><br>
             ✅ ${data.created} créé(s) · 🔄 ${data.already_existed} déjà présent(s) ·
             ⚠️ ${data.missing_in_ffb} absent(s) du fichier FFB ·
             ❌ ${data.errors} erreur(s) <small>(sur ${data.requested} demandé(s))</small>
             ${missingHtml}
+            ${errorsHtml}
           </div>`;
         loadOrganizations();
       } catch (error) {

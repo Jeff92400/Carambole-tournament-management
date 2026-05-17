@@ -1644,6 +1644,7 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
     const orgId = parseInt(id, 10);
     let created = 0, alreadyExisted = 0, missingInFfb = 0, errors = 0;
     const missing = [];
+    const errorDetails = []; // { licence, message, foreign_org? }
 
     for (const lic of normalized) {
       try {
@@ -1684,6 +1685,22 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
       } catch (e) {
         console.error(`[Seed licences] error for ${lic}:`, e.message);
         errors++;
+        // Surface the most common cross-org PK conflict for diagnostics
+        let foreignOrg = null;
+        try {
+          const conflicting = await dbGet(
+            `SELECT p.organization_id, o.short_name
+               FROM players p
+               LEFT JOIN organizations o ON o.id = p.organization_id
+              WHERE REPLACE(UPPER(p.licence), ' ', '') = $1
+              LIMIT 1`,
+            [lic]
+          );
+          if (conflicting) foreignOrg = conflicting.short_name || `org #${conflicting.organization_id}`;
+        } catch (_) { /* ignore */ }
+        if (errorDetails.length < 10) {
+          errorDetails.push({ licence: lic, message: e.message, existing_in_org: foreignOrg });
+        }
       }
     }
 
@@ -1710,7 +1727,8 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
       already_existed: alreadyExisted,
       missing_in_ffb: missingInFfb,
       errors,
-      missing
+      missing,
+      error_details: errorDetails
     });
   } catch (error) {
     console.error('Error seeding licences:', error);
