@@ -1624,6 +1624,7 @@ router.post('/organizations/:id/seed-players', async (req, res) => {
 router.post('/organizations/:id/seed-licences', async (req, res) => {
   const { id } = req.params;
   const licencesIn = Array.isArray(req.body?.licences) ? req.body.licences : [];
+  const force = req.body?.force === true; // when true, reassign cross-org conflicts
   if (licencesIn.length === 0) {
     return res.status(400).json({ error: 'Aucune licence fournie' });
   }
@@ -1642,7 +1643,7 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
     if (!org) return res.status(404).json({ error: 'Organisation non trouvée' });
 
     const orgId = parseInt(id, 10);
-    let created = 0, alreadyExisted = 0, missingInFfb = 0, errors = 0;
+    let created = 0, alreadyExisted = 0, missingInFfb = 0, errors = 0, moved = 0;
     const missing = [];
     const errorDetails = []; // { licence, message, foreign_org? }
 
@@ -1683,9 +1684,10 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
         );
         created++;
       } catch (e) {
-        console.error(`[Seed licences] error for ${lic}:`, e.message);
-        errors++;
-        // Surface the most common cross-org PK conflict for diagnostics
+        // Detect cross-org PK conflict and, when force=true, reassign the
+        // player to the target org. We never silently steal players —
+        // force must be opted into by the caller.
+        const isPkConflict = /duplicate key.*players_pkey|already exists/i.test(e.message || '');
         let foreignOrg = null;
         try {
           const conflicting = await dbGet(
@@ -1698,6 +1700,28 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
           );
           if (conflicting) foreignOrg = conflicting.short_name || `org #${conflicting.organization_id}`;
         } catch (_) { /* ignore */ }
+
+        if (force && isPkConflict) {
+          try {
+            await dbRun(
+              `UPDATE players SET organization_id = $1, ffb_last_sync = CURRENT_TIMESTAMP
+                WHERE REPLACE(UPPER(licence), ' ', '') = $2`,
+              [orgId, lic]
+            );
+            moved++;
+            continue;
+          } catch (e2) {
+            console.error(`[Seed licences] force-move failed for ${lic}:`, e2.message);
+            if (errorDetails.length < 10) {
+              errorDetails.push({ licence: lic, message: 'force-move failed: ' + e2.message, existing_in_org: foreignOrg });
+            }
+            errors++;
+            continue;
+          }
+        }
+
+        console.error(`[Seed licences] error for ${lic}:`, e.message);
+        errors++;
         if (errorDetails.length < 10) {
           errorDetails.push({ licence: lic, message: e.message, existing_in_org: foreignOrg });
         }
@@ -1716,7 +1740,7 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
       action: ACTION_TYPES.USER_CREATED || 'user_created',
       targetType: 'organization',
       targetId: id,
-      details: `Seed ciblé ${org.short_name}: ${created} créés, ${alreadyExisted} déjà présents, ${missingInFfb} absents du fichier FFB, ${errors} erreurs (sur ${normalized.length} demandés)`
+      details: `Seed ciblé ${org.short_name}: ${created} créés, ${moved} déplacés${force ? ' (forcé)' : ''}, ${alreadyExisted} déjà présents, ${missingInFfb} absents du fichier FFB, ${errors} erreurs (sur ${normalized.length} demandés)`
     });
 
     res.json({
@@ -1724,11 +1748,13 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
       organization: org.short_name,
       requested: normalized.length,
       created,
+      moved,
       already_existed: alreadyExisted,
       missing_in_ffb: missingInFfb,
       errors,
       missing,
-      error_details: errorDetails
+      error_details: errorDetails,
+      forced: force
     });
   } catch (error) {
     console.error('Error seeding licences:', error);

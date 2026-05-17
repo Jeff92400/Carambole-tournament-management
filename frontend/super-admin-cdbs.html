@@ -864,22 +864,26 @@
       }
     });
 
-    async function seedLicences() {
+    async function seedLicences(forceLicences, forceMode) {
       const orgId = currentOrgId;
       if (!orgId) { showToast('Sélectionnez d\'abord une organisation', 'error'); return; }
-      const licences = _parseLicencesInput(document.getElementById('seedLicencesInput').value);
+      // Optional forceLicences (array) lets the "Forcer le déplacement" retry
+      // target only the conflicting licences rather than re-pasting them.
+      const licences = forceLicences && forceLicences.length
+        ? forceLicences
+        : _parseLicencesInput(document.getElementById('seedLicencesInput').value);
       if (licences.length === 0) { showToast('Aucune licence valide saisie', 'error'); return; }
       if (licences.length > 500) { showToast('Max 500 licences par appel', 'error'); return; }
 
       const btn = document.getElementById('btnSeedLicences');
       const resultEl = document.getElementById('seedLicencesResult');
-      btn.disabled = true; btn.textContent = 'Import en cours…';
-      resultEl.innerHTML = '';
+      btn.disabled = true; btn.textContent = forceMode ? 'Déplacement en cours…' : 'Import en cours…';
+      if (!forceMode) resultEl.innerHTML = '';
       try {
         const res = await authFetch(`${API_URL}/super-admin/organizations/${orgId}/seed-licences`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ licences })
+          body: JSON.stringify({ licences, force: !!forceMode })
         });
         const data = await res.json();
         if (!res.ok) {
@@ -890,30 +894,52 @@
           ? `<div style="margin-top:8px;font-size:12px;color:#888;">Absents du fichier FFB : <code>${data.missing.join(', ')}</code></div>`
           : '';
         const errorsHtml = (data.error_details || []).length
-          ? `<details style="margin-top:8px;font-size:12px;"><summary style="cursor:pointer;color:#c62828;font-weight:600;">Détails des erreurs (${data.error_details.length})</summary>
+          ? `<details style="margin-top:8px;font-size:12px;" open><summary style="cursor:pointer;color:#c62828;font-weight:600;">Détails des erreurs (${data.error_details.length})</summary>
               <table style="width:100%;margin-top:8px;border-collapse:collapse;font-size:11px;">
                 <thead><tr style="background:#f5f5f5;"><th style="text-align:left;padding:4px 6px;">Licence</th><th style="text-align:left;padding:4px 6px;">Déjà dans</th><th style="text-align:left;padding:4px 6px;">Message</th></tr></thead>
                 <tbody>${data.error_details.map(e => `<tr style="border-top:1px solid #eee;"><td style="padding:4px 6px;"><code>${e.licence}</code></td><td style="padding:4px 6px;color:#1565c0;">${e.existing_in_org || '—'}</td><td style="padding:4px 6px;color:#666;">${e.message}</td></tr>`).join('')}</tbody>
               </table></details>`
           : '';
+        const movedHtml = (data.moved > 0)
+          ? ` · 🔀 ${data.moved} déplacé(s)`
+          : '';
+        // Identify cross-org PK conflicts to offer a "Forcer" retry button
+        const conflicts = (data.error_details || []).filter(e =>
+          /duplicate key.*players_pkey|already exists/i.test(e.message || '') && e.existing_in_org
+        );
+        const forceBtnHtml = conflicts.length && !data.forced
+          ? `<div style="margin-top:10px;padding:10px;background:#fff;border:1px dashed #ff9800;border-radius:6px;">
+              <strong>${conflicts.length} licence(s) déjà rattachée(s) à une autre organisation.</strong>
+              <p style="margin:4px 0;font-size:12px;color:#666;">
+                Cliquer "Forcer le déplacement" déplacera ces joueurs de leur organisation actuelle vers
+                <strong>${data.organization}</strong>. Ils n'apparaîtront plus dans l'organisation d'origine.
+                À n'utiliser que si vous êtes certain qu'ils n'y sont pas actifs (inscriptions, classements).
+              </p>
+              <button class="btn-sm btn-warning" onclick='seedLicences(${JSON.stringify(conflicts.map(c => c.licence))}, true)'>🔓 Forcer le déplacement (${conflicts.length})</button>
+            </div>`
+          : '';
         const bg = data.errors > 0 ? '#fff3e0' : '#e8f5e9';
         resultEl.innerHTML = `
           <div style="background:${bg};padding:12px;border-radius:6px;">
-            <strong>Import terminé pour ${data.organization}</strong><br>
-            ✅ ${data.created} créé(s) · 🔄 ${data.already_existed} déjà présent(s) ·
+            <strong>${forceMode ? 'Déplacement' : 'Import'} terminé pour ${data.organization}</strong><br>
+            ✅ ${data.created} créé(s)${movedHtml} · 🔄 ${data.already_existed} déjà présent(s) ·
             ⚠️ ${data.missing_in_ffb} absent(s) du fichier FFB ·
             ❌ ${data.errors} erreur(s) <small>(sur ${data.requested} demandé(s))</small>
             ${missingHtml}
             ${errorsHtml}
+            ${forceBtnHtml}
           </div>`;
         loadOrganizations();
       } catch (error) {
         console.error('Error seeding licences:', error);
         resultEl.innerHTML = `<div style="background:#ffebee;color:#c62828;padding:10px;border-radius:6px;">Erreur réseau : ${error.message}</div>`;
       } finally {
-        btn.disabled = false; btn.textContent = 'Importer ces licences';
+        btn.disabled = false;
+        btn.textContent = 'Importer ces licences';
       }
     }
+    // Expose for inline onclick handlers
+    window.seedLicences = seedLicences;
 
     // ==================== Login URL + Welcome Email ====================
     function copyUrl(inputId) {
