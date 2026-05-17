@@ -696,7 +696,13 @@
           <td class="num" style="font-weight:700;">${medal(p.rank)}${p.rank}</td>
           <td>${escapeHtml(p.name || p.licence)}</td>
           <td style="color:#666;font-size:0.9em;">${escapeHtml(p.club || '')}</td>
-          <td style="font-size:0.9em;color:#666;">${p.poule_number ? 'Poule ' + String.fromCharCode(64 + p.poule_number) : '—'}</td>
+          <td style="font-size:0.9em;color:#666;">${
+            p.poule_number ? 'Poule ' + String.fromCharCode(64 + p.poule_number)
+            // V 2.0.854 — show "Qualifié d'office" for direct qualifs instead
+            // of a blank "—". Per LBIF règlement these players never play a
+            // poule (they qualify directly to the tableau final).
+            : `<span style="color:#c62828;font-weight:600;">🎯 Qualifié d'office</span>`
+          }</td>
           <td style="font-size:0.9em;">${escapeHtml(p.position_label || p.position || '—')}</td>
           <td class="num" style="font-weight:800;color:#c8102e;font-size:1.05em;">${p.points}</td>
         </tr>

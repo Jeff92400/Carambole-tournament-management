@@ -5294,6 +5294,58 @@ async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx 
     if (s) s.final_place = fp.place;
   }
 
+  // V 2.0.854 — Defensive bracket-qualifier pass.
+  // Every player listed in bracketCtx.qualifiers MUST end up with a non-null
+  // position. If a qualifier somehow isn't in summary yet (rare: e.g. their
+  // convocation_poules row went missing, or a normalisation edge case lost
+  // the lookup), synthesise an entry now. Then re-walk the bracket phases
+  // ONLY for those qualifiers, so they pick up their bracket_phase_lost tag.
+  // This is a belt-and-suspenders guard against the V 2.0.852/853 fixes
+  // not catching every case (observed in production: David BERTRAND,
+  // direct qualif, QF1 loser, silently dropped from the classement).
+  for (const q of (bracketCtx.qualifiers || [])) {
+    const qNorm = normLic(q.licence);
+    if (!qNorm) continue;
+    if (!summary.has(qNorm)) {
+      summary.set(qNorm, {
+        licence: q.licence,
+        name: q.player_name || 'Joueur',
+        club: q.club || null,
+        poule_number: q.poule_number || null,
+        is_direct_qualif: q.source === 'direct',
+        poule_wins: 0,
+        poule_qualified: q.source === 'exempt' || q.source === 'barrage_winner',
+        barrage_played: q.source === 'barrage_winner',
+        barrage_won: q.source === 'barrage_winner',
+        bracket_phase_lost: null,
+        bracket_phase_won: null,
+        final_place: null,
+        position: null,
+        points: 0
+      });
+    }
+    // Re-tag from saved bracket phases — covers the case where the first
+    // walk missed this player (whatever the reason). Idempotent: skips if
+    // bracket_phase_lost / bracket_phase_won already set.
+    const s = summary.get(qNorm);
+    if (!s.bracket_phase_lost && !s.bracket_phase_won && s.final_place == null) {
+      for (const ph of sortedPhases) {
+        const lics = phaseLicences(ph);
+        const isP1 = normLic(lics.p1) === qNorm;
+        const isP2 = normLic(lics.p2) === qNorm;
+        if (!isP1 && !isP2) continue;
+        if (ph.p1_points == null || ph.p2_points == null) continue;
+        const won = (isP1 && ph.p1_points > ph.p2_points) || (isP2 && ph.p2_points > ph.p1_points);
+        const family = phaseFamily(ph.phase);
+        if (won) {
+          if (!s.bracket_phase_won && (family === 'F' || family === 'PF')) s.bracket_phase_won = family;
+        } else {
+          if (!s.bracket_phase_lost) { s.bracket_phase_lost = family; break; } // deepest = earliest in sortedPhases
+        }
+      }
+    }
+  }
+
   // 7. Map each player's outcome to an LBIF position key.
   for (const s of summary.values()) {
     if (s.final_place === 1) s.position = '1st';
