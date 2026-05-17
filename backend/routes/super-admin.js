@@ -1609,6 +1609,115 @@ router.post('/organizations/:id/seed-players', async (req, res) => {
   }
 });
 
+// POST /api/super-admin/organizations/:id/seed-licences — Targeted seed.
+// Takes an explicit list of licences and copies just those from ffb_licences
+// into the org's players table. Useful for Ligue orgs that need a subset of
+// players (e.g. a specific Quilles tournament's 24 participants) instead of
+// the full ligue seed.
+//
+// Critical org-isolation property (differs from /seed-players which has a
+// pre-existing scoping bug): this endpoint ONLY operates on the
+// (licence, organization_id = $id) row. If the same licence exists in
+// another org, that row is left untouched — a new row is inserted for the
+// target org. This is the correct behaviour given the V2.0.408 composite
+// UNIQUE on (licence, organization_id).
+router.post('/organizations/:id/seed-licences', async (req, res) => {
+  const { id } = req.params;
+  const licencesIn = Array.isArray(req.body?.licences) ? req.body.licences : [];
+  if (licencesIn.length === 0) {
+    return res.status(400).json({ error: 'Aucune licence fournie' });
+  }
+  const normalized = [...new Set(licencesIn
+    .map(l => String(l || '').replace(/\s+/g, '').toUpperCase())
+    .filter(Boolean))];
+  if (normalized.length === 0) {
+    return res.status(400).json({ error: 'Licences invalides' });
+  }
+  if (normalized.length > 500) {
+    return res.status(400).json({ error: 'Trop de licences (max 500 par appel)' });
+  }
+
+  try {
+    const org = await dbGet(`SELECT id, short_name FROM organizations WHERE id = $1`, [id]);
+    if (!org) return res.status(404).json({ error: 'Organisation non trouvée' });
+
+    const orgId = parseInt(id, 10);
+    let created = 0, alreadyExisted = 0, missingInFfb = 0, errors = 0;
+    const missing = [];
+
+    for (const lic of normalized) {
+      try {
+        const fl = await dbGet(
+          `SELECT fl.*, fc.nom as club_name
+             FROM ffb_licences fl
+             LEFT JOIN ffb_clubs fc ON fl.num_club = fc.numero
+            WHERE REPLACE(UPPER(fl.licence), ' ', '') = $1
+            LIMIT 1`,
+          [lic]
+        );
+        if (!fl) { missingInFfb++; missing.push(lic); continue; }
+
+        const existing = await dbGet(
+          `SELECT id FROM players
+            WHERE REPLACE(UPPER(licence), ' ', '') = $1
+              AND organization_id = $2
+            LIMIT 1`,
+          [lic, orgId]
+        );
+        if (existing) { alreadyExisted++; continue; }
+
+        const rd = fl.raw_data ? (typeof fl.raw_data === 'string' ? JSON.parse(fl.raw_data) : fl.raw_data) : {};
+        const phone = rd.Tel_port || rd.Tel_fixe || null;
+        const clubName = fl.club_name || '';
+
+        await dbRun(
+          `INSERT INTO players
+             (licence, first_name, last_name, club, date_of_birth, sexe,
+              ffb_categorie, discipline, nationalite, ffb_club_numero,
+              email, telephone, organization_id, ffb_last_sync)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)`,
+          [fl.licence, fl.prenom || '', fl.nom || '', clubName,
+           fl.date_de_naissance, fl.sexe, fl.categorie, fl.discipline,
+           fl.nationalite, fl.num_club, fl.email || null, phone, orgId]
+        );
+        created++;
+      } catch (e) {
+        console.error(`[Seed licences] error for ${lic}:`, e.message);
+        errors++;
+      }
+    }
+
+    if (created > 0) {
+      try {
+        const { syncContacts } = require('./emailing');
+        await syncContacts();
+      } catch (_) { /* non-fatal */ }
+    }
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_CREATED || 'user_created',
+      targetType: 'organization',
+      targetId: id,
+      details: `Seed ciblé ${org.short_name}: ${created} créés, ${alreadyExisted} déjà présents, ${missingInFfb} absents du fichier FFB, ${errors} erreurs (sur ${normalized.length} demandés)`
+    });
+
+    res.json({
+      success: true,
+      organization: org.short_name,
+      requested: normalized.length,
+      created,
+      already_existed: alreadyExisted,
+      missing_in_ffb: missingInFfb,
+      errors,
+      missing
+    });
+  } catch (error) {
+    console.error('Error seeding licences:', error);
+    res.status(500).json({ error: 'Erreur lors de l\'import des licences: ' + error.message });
+  }
+});
+
 // ==================== SYNC PLAYERS WITH FFB ====================
 
 // GET /api/super-admin/organizations/:id/sync-preview — Detailed diff between local players and FFB licences

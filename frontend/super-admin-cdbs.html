@@ -286,6 +286,22 @@
       </div>
     </div>
 
+    <!-- Targeted Seed by Licence List (visible when an org is selected) -->
+    <div class="card seed-section" id="seedLicencesSection">
+      <h3>📋 Importer des joueurs par liste de licences — <span id="seedLicencesOrgName"></span></h3>
+      <p style="font-size: 12px; color: #888; margin: 0 0 12px 0;">
+        Colle une liste de numéros de licence FFB (un par ligne, ou séparés par virgules / espaces).
+        Les joueurs correspondants seront ajoutés à cette organisation depuis le fichier FFB.
+        Pratique pour les Ligues qui veulent importer seulement les participants d'un tournoi spécifique.
+      </p>
+      <textarea id="seedLicencesInput" rows="6" style="width: 100%; font-family: monospace; font-size: 13px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="103513H&#10;170920H&#10;129824G&#10;..."></textarea>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button class="btn-sm btn-primary btn-lg" onclick="seedLicences()" id="btnSeedLicences">Importer ces licences</button>
+        <span id="seedLicencesCount" style="font-size: 12px; color: #888; align-self: center;"></span>
+      </div>
+      <div id="seedLicencesResult" style="margin-top: 12px;"></div>
+    </div>
+
     <!-- Sync Players with FFB (visible when an org is selected) -->
     <div class="card seed-section" id="syncSection">
       <h3>Synchroniser les joueurs avec le fichier FFB — <span id="syncOrgName"></span></h3>
@@ -822,6 +838,72 @@
       document.getElementById('syncPreview').innerHTML = '';
       document.getElementById('syncResult').innerHTML = '';
       document.getElementById('btnSyncApply').style.display = 'none';
+
+      // Show targeted seed-by-licences section
+      document.getElementById('seedLicencesSection').classList.add('visible');
+      document.getElementById('seedLicencesOrgName').textContent = shortName;
+      document.getElementById('seedLicencesInput').value = '';
+      document.getElementById('seedLicencesResult').innerHTML = '';
+      document.getElementById('seedLicencesCount').textContent = '';
+    }
+
+    // ==================== Targeted seed by licences list ====================
+    function _parseLicencesInput(raw) {
+      return [...new Set(
+        String(raw || '')
+          .split(/[\s,;\n\r]+/)
+          .map(s => s.trim().toUpperCase())
+          .filter(Boolean)
+      )];
+    }
+
+    document.addEventListener('input', (e) => {
+      if (e.target && e.target.id === 'seedLicencesInput') {
+        const n = _parseLicencesInput(e.target.value).length;
+        document.getElementById('seedLicencesCount').textContent = n ? `${n} licence(s) détectée(s)` : '';
+      }
+    });
+
+    async function seedLicences() {
+      const orgId = currentOrgId;
+      if (!orgId) { showToast('Sélectionnez d\'abord une organisation', 'error'); return; }
+      const licences = _parseLicencesInput(document.getElementById('seedLicencesInput').value);
+      if (licences.length === 0) { showToast('Aucune licence valide saisie', 'error'); return; }
+      if (licences.length > 500) { showToast('Max 500 licences par appel', 'error'); return; }
+
+      const btn = document.getElementById('btnSeedLicences');
+      const resultEl = document.getElementById('seedLicencesResult');
+      btn.disabled = true; btn.textContent = 'Import en cours…';
+      resultEl.innerHTML = '';
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${orgId}/seed-licences`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ licences })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          resultEl.innerHTML = `<div style="background:#ffebee;color:#c62828;padding:10px;border-radius:6px;">${data.error || 'Erreur'}</div>`;
+          return;
+        }
+        const missingHtml = (data.missing || []).length
+          ? `<div style="margin-top:8px;font-size:12px;color:#888;">Absents du fichier FFB : <code>${data.missing.join(', ')}</code></div>`
+          : '';
+        resultEl.innerHTML = `
+          <div style="background:#e8f5e9;padding:12px;border-radius:6px;">
+            <strong>Import terminé pour ${data.organization}</strong><br>
+            ✅ ${data.created} créé(s) · 🔄 ${data.already_existed} déjà présent(s) ·
+            ⚠️ ${data.missing_in_ffb} absent(s) du fichier FFB ·
+            ❌ ${data.errors} erreur(s) <small>(sur ${data.requested} demandé(s))</small>
+            ${missingHtml}
+          </div>`;
+        loadOrganizations();
+      } catch (error) {
+        console.error('Error seeding licences:', error);
+        resultEl.innerHTML = `<div style="background:#ffebee;color:#c62828;padding:10px;border-radius:6px;">Erreur réseau : ${error.message}</div>`;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Importer ces licences';
+      }
     }
 
     // ==================== Login URL + Welcome Email ====================
@@ -1098,6 +1180,7 @@
           currentOrgId = null;
           document.getElementById('orgSummarySection').classList.remove('visible');
           document.getElementById('syncSection').classList.remove('visible');
+          document.getElementById('seedLicencesSection').classList.remove('visible');
         }
 
         loadOrganizations();
