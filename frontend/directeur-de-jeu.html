@@ -213,6 +213,21 @@
         <div id="ddj-past-cards" class="ddj-cards-grid"></div>
       </div>
 
+      <!-- V 2.0.869 — Admin-only "load older tournaments" control for
+           backfilling via the E2i import. Default DdJ view shows last 7
+           days; admin can widen to any date in the past. -->
+      <div class="admin-only" style="margin-top: 24px; padding: 16px; background: #f8f9fa; border: 1px dashed #adb5bd; border-radius: 8px; text-align: center;">
+        <p style="margin: 0 0 10px 0; font-size: 0.92em; color: #495057;">
+          🔑 <strong>Administrateur</strong> — Vous ne voyez pas le tournoi recherché ? Élargissez la fenêtre :
+        </p>
+        <label style="font-size: 0.88em; color: #666; margin-right: 8px;">À partir du :</label>
+        <input type="date" id="ddj-since-date" style="padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9em;">
+        <button onclick="reloadCompetitionsWithSince()" style="margin-left: 8px; padding: 6px 14px; background: #1F4788; color: white; border: none; border-radius: 4px; font-size: 0.88em; font-weight: 600; cursor: pointer;">
+          🔄 Charger
+        </button>
+        <span style="font-size: 0.82em; color: #888; margin-left: 10px;">(par défaut : 7 derniers jours)</span>
+      </div>
+
       <!-- Empty state -->
       <div id="ddj-empty-state" class="ddj-empty-state" style="display: none;">
         <img id="ddj-empty-logo" class="empty-logo" src="images/FrenchBillard-Icon-small.png" alt="">
@@ -484,8 +499,20 @@
     }
     window.runE2iApply = runE2iApply;
 
+    // V 2.0.869 — Admin reload with a wider lookback window for E2i backfill
+    function reloadCompetitionsWithSince() {
+      const input = document.getElementById('ddj-since-date');
+      const since = (input && input.value) || '';
+      if (!since || !/^\d{4}-\d{2}-\d{2}$/.test(since)) {
+        alert('Veuillez choisir une date de début valide.');
+        return;
+      }
+      loadCompetitions(since);
+    }
+    window.reloadCompetitionsWithSince = reloadCompetitionsWithSince;
+
     // Load competitions
-    async function loadCompetitions() {
+    async function loadCompetitions(sinceOverride) {
       try {
         const fetchFn = typeof authFetch === 'function' ? authFetch : (url, opts) => {
           opts = opts || {};
@@ -493,7 +520,9 @@
           return fetch(url, opts);
         };
 
-        const response = await fetchFn(`${API_URL}/directeur-jeu/competitions`);
+        // V 2.0.869 — admin can pass ?since=YYYY-MM-DD to widen the window
+        const qs = sinceOverride ? `?since=${encodeURIComponent(sinceOverride)}` : '';
+        const response = await fetchFn(`${API_URL}/directeur-jeu/competitions${qs}`);
 
         if (!response.ok) {
           throw new Error(`Erreur serveur (${response.status})`);

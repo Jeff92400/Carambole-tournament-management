@@ -206,10 +206,21 @@ router.get('/competitions', authenticateToken, requireDdJ, (req, res) => {
   // Get today's date in Paris timezone
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
 
-  // Also get date 7 days ago for history
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const historyStart = sevenDaysAgo.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+  // V 2.0.869 — Admin can override the lookback window via ?since=YYYY-MM-DD
+  // for backfilling an old tournament via the E2i import. Default stays at
+  // 7 days for the normal DdJ-of-the-day flow. Non-admin requests ignore the
+  // override (so directeur_jeu role still sees only the recent window).
+  let historyStart;
+  const sinceParam = (req.query && req.query.since) || '';
+  const isAdmin = req.user && (req.user.role === 'admin' || req.user.isSuperAdmin);
+  if (isAdmin && /^\d{4}-\d{2}-\d{2}$/.test(sinceParam)) {
+    historyStart = sinceParam;
+  } else {
+    // Default: 7 days ago
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    historyStart = sevenDaysAgo.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+  }
 
   // V 2.0.790 — Quilles fields added to the SELECT so the competitions
   // dashboard can flag Quilles tournaments with the LBIF colour theme.
