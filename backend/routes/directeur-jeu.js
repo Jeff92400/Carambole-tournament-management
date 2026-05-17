@@ -4929,9 +4929,7 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
       },
       overall_classement: overall,
       ffb_classement: ffbClassement,
-      lbif_classement: lbifClassement,
-      // V 2.0.855 — temporary debug, pulled off the array's _debug prop
-      lbif_debug: (lbifClassement && lbifClassement._debug) || null
+      lbif_classement: lbifClassement
     });
   } catch (err) {
     // V 2.0.837 — surface the real error message so we can diagnose Quilles
@@ -5220,9 +5218,20 @@ async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx 
     p1: ph.p1_licence_saved || (ph.p1 && ph.p1.licence) || null,
     p2: ph.p2_licence_saved || (ph.p2 && ph.p2.licence) || null
   });
+  // V 2.0.856 — DON'T gate on ph.is_played here. That flag uses the strict
+  // isMatchTrulyFinished helper, which for Quilles requires someone to reach
+  // the distance (e.g. 100 pts). Real production case (tournament 404 QF1):
+  // Eric scored 99 vs David's 93. Neither hit 100, so is_played = false,
+  // QF1 was dropped from sortedPhases, David never got tagged as QF1 loser
+  // → silently missing from the LBIF classement. But everyone (the DdJ, the
+  // downstream SF1/F/PF saved rows) treated Eric as the QF1 winner.
+  //
+  // For the LBIF classement walk we only need: both scores present + not
+  // a tie. The saved-licence fallback (V 2.0.851) handles the player IDs.
   const sortedPhases = (bracketCtx.phases || [])
     .filter(ph => {
-      if (!ph.is_played) return false;
+      if (ph.p1_points == null || ph.p2_points == null) return false;
+      if (ph.p1_points === ph.p2_points) return false; // can't determine winner
       const lics = phaseLicences(ph);
       return !!(lics.p1 && lics.p2);
     })
@@ -5390,36 +5399,6 @@ async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx 
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
   out.forEach((p, i) => { p.rank = i + 1; });
-
-  // V 2.0.855 — Temporary debug payload. Lets us see WHY a player is missing
-  // from the LBIF classement (in production: David BERTRAND, direct qualif,
-  // QF1 loser, dropped despite V 2.0.851/852/853/854 fixes). Will be
-  // reverted once the root cause is identified.
-  out._debug = {
-    summary_count: summary.size,
-    summary_keys: [...summary.keys()],
-    qualifier_keys: (bracketCtx.qualifiers || []).map(q => normLic(q.licence)),
-    qualifier_details: (bracketCtx.qualifiers || []).map(q => {
-      const k = normLic(q.licence);
-      const s = summary.get(k);
-      return {
-        name: q.player_name, lic: q.licence, source: q.source, normLic: k,
-        inSummary: !!s,
-        position: s ? s.position : '(no summary)',
-        bracket_phase_lost: s ? s.bracket_phase_lost : null,
-        bracket_phase_won: s ? s.bracket_phase_won : null,
-        final_place: s ? s.final_place : null,
-        poule_qualified: s ? s.poule_qualified : null,
-        is_direct_qualif: s ? s.is_direct_qualif : null
-      };
-    }),
-    sortedPhases_summary: sortedPhases.map(ph => ({
-      phase: ph.phase, is_played: ph.is_played,
-      p1_lic: phaseLicences(ph).p1, p2_lic: phaseLicences(ph).p2,
-      p1_points: ph.p1_points, p2_points: ph.p2_points
-    }))
-  };
-
   return out;
 }
 
