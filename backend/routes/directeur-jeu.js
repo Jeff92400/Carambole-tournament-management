@@ -6859,6 +6859,338 @@ router.post('/competitions/:id/reset-all-scores',
   }
 );
 
+// ============================================================================
+// V 2.0.868 — E2i CSV → DdJ import (Phase 1: poule matches transcription)
+// ============================================================================
+//
+// One-click admin shortcut: upload an E2i match CSV and populate the DdJ
+// state for a tournament that was played outside the app (or to backfill
+// data entered elsewhere). Saves the manual re-typing of scores.
+//
+// Tier 1 (this commit): poule matches only.
+//   • Auto-marks players as "présent" via convocation_poules
+//   • Auto-generates poule composition from CSV (POULE A → poule_number 1, etc.)
+//   • Upserts ddj_poule_matches scores by matching (p1_licence, p2_licence)
+//   • Bracket + consolante + barrage: classified but NOT yet written (Tier 2-4)
+//
+// Tier 2/3/4 (subsequent commits): bracket, consolante, Quilles-specific
+// phases (barrage, dynamic QF/EIGHTH).
+//
+// Admin-only — uses requireAdmin middleware so DdJ-role users can't trigger
+// destructive backfills.
+// ============================================================================
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { parseMatchCSV, isClassificationPoule, repairExcelPouleName } = require('./tournaments');
+
+// Multer setup mirrors the tournaments.js pattern (5 MB, CSV only)
+const _e2iUploadsDir = path.join(__dirname, '..', '..', 'uploads');
+try { if (!fs.existsSync(_e2iUploadsDir)) fs.mkdirSync(_e2iUploadsDir, { recursive: true }); }
+catch (_) { /* non-fatal */ }
+const _e2iUpload = multer({
+  dest: _e2iUploadsDir,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = (file.originalname || '').toLowerCase().slice((file.originalname || '').lastIndexOf('.'));
+    cb(null, ext === '.csv');
+  }
+});
+
+// Helper: derive poule_number (1-based) from CSV poule label.
+// Accepts "POULE A" / "POULE B" / "A" / "B" / "1" / "2" etc.
+// Returns null if the label doesn't look like a poule (likely bracket/conso).
+function _e2iPouleLabelToNumber(label) {
+  if (!label) return null;
+  const upper = String(label).toUpperCase().trim();
+  // Match "POULE A" or just "A" — single letter A-Z = 1-26
+  const letterMatch = upper.match(/^(?:POULE\s+)?([A-Z])$/);
+  if (letterMatch) return letterMatch[1].charCodeAt(0) - 64;
+  // Match "POULE 1" / "1" — direct integer
+  const numMatch = upper.match(/^(?:POULE\s+)?(\d+)$/);
+  if (numMatch) return parseInt(numMatch[1], 10);
+  return null;
+}
+
+// Helper: cleanup uploaded files (best-effort, ignores errors)
+function _e2iCleanupFiles(files) {
+  if (!files || !files.length) return;
+  for (const f of files) {
+    try { fs.unlinkSync(f.path); } catch (_) {}
+  }
+}
+
+// POST /competitions/:id/import-e2i-csv
+// Body (multipart): files[] (CSV), mode = 'preview' | 'apply'
+// Returns: { ok, summary: { players, poules, poule_matches, bracket_matches,
+//   consolante_matches, barrage_matches }, warnings: [...], errors: [...],
+//   applied: boolean }
+router.post('/competitions/:id/import-e2i-csv',
+  authenticateToken, requireAdmin, _e2iUpload.array('files', 5),
+  async (req, res) => {
+    const db = getDb();
+    const orgId = req.user.organizationId || null;
+    const tournoiId = parseInt(req.params.id, 10);
+    const mode = (req.body && req.body.mode === 'apply') ? 'apply' : 'preview';
+    const files = req.files || [];
+
+    if (!Number.isFinite(tournoiId)) {
+      _e2iCleanupFiles(files);
+      return res.status(400).json({ error: 'ID tournoi invalide' });
+    }
+    if (files.length === 0) {
+      return res.status(400).json({ error: 'Aucun fichier CSV uploadé' });
+    }
+
+    const warnings = [];
+    const errors = [];
+
+    try {
+      // 1. Verify the tournament belongs to the admin's org
+      const tournament = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT tournoi_id, nom, mode, categorie, debut, lieu, organization_id
+             FROM tournoi_ext
+            WHERE tournoi_id = $1 AND ($2::int IS NULL OR organization_id = $2)`,
+          [tournoiId, orgId], (err, r) => err ? reject(err) : resolve(r)
+        );
+      });
+      if (!tournament) {
+        _e2iCleanupFiles(files);
+        return res.status(404).json({ error: 'Tournoi introuvable' });
+      }
+
+      // 2. Parse all uploaded CSV files
+      let allMatches = [];
+      for (const f of files) {
+        const matches = await parseMatchCSV(f.path);
+        allMatches = allMatches.concat(matches);
+      }
+      _e2iCleanupFiles(files);
+
+      if (allMatches.length === 0) {
+        return res.status(400).json({ error: 'Aucun match valide trouvé dans le CSV' });
+      }
+
+      // 3. Classify each match: poule / bracket / consolante / barrage
+      //    Tier 1: only poule matches are persisted; others counted for the
+      //    summary but not yet written.
+      const pouleMatches = [];
+      const bracketMatches = [];
+      const consolanteMatches = [];
+      const barrageMatches = [];
+      const unclassified = [];
+
+      for (const m of allMatches) {
+        const label = m.poule_name || '';
+        const upper = label.toUpperCase();
+        if (upper.includes('BARRAGE')) {
+          barrageMatches.push(m);
+        } else if (isClassificationPoule(label)) {
+          // Bracket = FINAL / DEMI / 1/2 / 1/4 / 1/8
+          // Consolante = CLASSEMENT / PLACE
+          if (upper.includes('CLASSEMENT') || /\bPLACES?\b/.test(upper) || /^\d{2}-\d{2}$/.test(label)) {
+            consolanteMatches.push(m);
+          } else {
+            bracketMatches.push(m);
+          }
+        } else {
+          // Try to map to a poule number
+          const pouleNum = _e2iPouleLabelToNumber(label);
+          if (pouleNum) {
+            pouleMatches.push({ ...m, _poule_number: pouleNum });
+          } else {
+            unclassified.push(m);
+          }
+        }
+      }
+
+      for (const u of unclassified) {
+        warnings.push(`Match non classifié ignoré : "${u.poule_name}" entre ${u.player1_licence} et ${u.player2_licence}`);
+      }
+
+      // 4. Build the poule composition from poule matches
+      //    Each player appears in matches of exactly one poule (POULE A, B, etc.)
+      //    For each unique licence, derive their poule_number from their first match.
+      const playerToPoule = new Map(); // licence_normalized → { licence, name, poule_number }
+      const normLic = (s) => String(s || '').replace(/\s+/g, '').toUpperCase();
+      for (const m of pouleMatches) {
+        for (const side of ['1', '2']) {
+          const lic = m[`player${side}_licence`];
+          const name = m[`player${side}_name`];
+          if (!lic) continue;
+          const k = normLic(lic);
+          if (!playerToPoule.has(k)) {
+            playerToPoule.set(k, { licence: lic, name, poule_number: m._poule_number });
+          }
+        }
+      }
+
+      // 5. Group by poule for the summary
+      const pouleSummary = new Map(); // poule_number → { players: [licences], matches: count }
+      for (const p of playerToPoule.values()) {
+        if (!pouleSummary.has(p.poule_number)) {
+          pouleSummary.set(p.poule_number, { players: [], matches: 0 });
+        }
+        pouleSummary.get(p.poule_number).players.push(p.licence);
+      }
+      for (const m of pouleMatches) {
+        if (pouleSummary.has(m._poule_number)) {
+          pouleSummary.get(m._poule_number).matches += 1;
+        }
+      }
+
+      // Build summary payload
+      const summary = {
+        tournament: { id: tournament.tournoi_id, nom: tournament.nom, mode: tournament.mode, categorie: tournament.categorie },
+        total_csv_matches: allMatches.length,
+        poule_matches: pouleMatches.length,
+        bracket_matches: bracketMatches.length,
+        consolante_matches: consolanteMatches.length,
+        barrage_matches: barrageMatches.length,
+        unclassified: unclassified.length,
+        players: playerToPoule.size,
+        poules: [...pouleSummary.entries()].map(([num, info]) => ({
+          poule_number: num,
+          poule_label: String.fromCharCode(64 + num),
+          player_count: info.players.length,
+          match_count: info.matches
+        })).sort((a, b) => a.poule_number - b.poule_number)
+      };
+
+      // 6. PREVIEW MODE: return summary without writing
+      if (mode === 'preview') {
+        return res.json({
+          ok: true,
+          applied: false,
+          mode: 'preview',
+          summary,
+          warnings,
+          errors,
+          tier_status: {
+            poules: 'will_be_imported',
+            bracket: bracketMatches.length > 0 ? 'classified_but_not_yet_imported_tier2' : 'no_matches',
+            consolante: consolanteMatches.length > 0 ? 'classified_but_not_yet_imported_tier3' : 'no_matches',
+            barrage: barrageMatches.length > 0 ? 'classified_but_not_yet_imported_tier4' : 'no_matches'
+          }
+        });
+      }
+
+      // 7. APPLY MODE: write to DdJ tables
+      //    Idempotent: wipe + reinsert convocation_poules + ddj_poule_matches
+      //    for this tournoi_id. Bracket / consolante / barrage rows are NOT
+      //    touched (Tier 2-4 will add that).
+
+      // 7a. Wipe & rewrite convocation_poules
+      await new Promise((resolve, reject) => {
+        db.run(`DELETE FROM convocation_poules WHERE tournoi_id = $1`,
+          [tournoiId], (err) => err ? reject(err) : resolve());
+      });
+
+      // 7b. Insert players (one row per player, ordered by poule + insertion order)
+      let playersInserted = 0;
+      const orderByPoule = new Map(); // poule_number → running order within poule
+      for (const [_k, p] of playerToPoule) {
+        const order = (orderByPoule.get(p.poule_number) || 0) + 1;
+        orderByPoule.set(p.poule_number, order);
+        // Best-effort: pull club from players table
+        const playerRow = await new Promise((resolve) => {
+          db.get(
+            `SELECT first_name, last_name, club FROM players
+              WHERE REPLACE(licence, ' ', '') = $1 AND ($2::int IS NULL OR organization_id = $2)
+              LIMIT 1`,
+            [normLic(p.licence), orgId], (err, r) => resolve(err ? null : r)
+          );
+        });
+        const displayName = playerRow
+          ? `${playerRow.last_name || ''} ${playerRow.first_name || ''}`.trim()
+          : (p.name || p.licence);
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO convocation_poules
+               (tournoi_id, poule_number, licence, player_name, club, player_order)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [tournoiId, p.poule_number, p.licence, displayName,
+             playerRow ? playerRow.club : null, order],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+        playersInserted++;
+      }
+
+      // 7c. Wipe & rewrite ddj_poule_matches with scores
+      await new Promise((resolve, reject) => {
+        db.run(`DELETE FROM ddj_poule_matches WHERE tournoi_id = $1`,
+          [tournoiId], (err) => err ? reject(err) : resolve());
+      });
+
+      // Assign match_number sequentially per poule (we don't try to match the
+      // FFB order — the scores are the only thing that matters for the recap).
+      const matchSeq = new Map(); // poule_number → running match_number
+      let matchesInserted = 0;
+      for (const m of pouleMatches) {
+        const pn = m._poule_number;
+        const seq = (matchSeq.get(pn) || 0) + 1;
+        matchSeq.set(pn, seq);
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO ddj_poule_matches
+               (tournoi_id, poule_number, match_number,
+                p1_licence, p2_licence,
+                p1_points, p1_reprises, p1_serie,
+                p2_points, p2_reprises, p2_serie,
+                entered_at, entered_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, $12)`,
+            [tournoiId, pn, seq,
+             m.player1_licence, m.player2_licence,
+             m.player1_points || 0, m.player1_reprises || 0, m.player1_serie || 0,
+             m.player2_points || 0, m.player2_reprises || 0, m.player2_serie || 0,
+             req.user.userId || null],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+        matchesInserted++;
+      }
+
+      // 8. Audit log
+      try {
+        await new Promise((resolve) => {
+          db.run(
+            `INSERT INTO activity_logs
+               (organization_id, action, action_type, entity_type, entity_id, user_id, details, source)
+             VALUES ($1, 'ddj_import_e2i', 'success', 'tournament', $2, $3, $4, 'admin')`,
+            [orgId, tournoiId, req.user.userId || null,
+             JSON.stringify({ players: playersInserted, matches: matchesInserted,
+               poules: pouleSummary.size, bracket_pending: bracketMatches.length,
+               consolante_pending: consolanteMatches.length, barrage_pending: barrageMatches.length })],
+            () => resolve()
+          );
+        });
+      } catch (_) {}
+
+      return res.json({
+        ok: true,
+        applied: true,
+        mode: 'apply',
+        summary,
+        warnings,
+        errors,
+        applied_counts: {
+          players: playersInserted,
+          poule_matches: matchesInserted,
+          bracket_matches: 0,   // Tier 2 (V 2.0.869)
+          consolante_matches: 0, // Tier 3 (V 2.0.870)
+          barrage_matches: 0     // Tier 4 (V 2.0.871)
+        },
+        redirect_url: `directeur-de-jeu-matchs.html?compId=${tournoiId}`
+      });
+    } catch (err) {
+      _e2iCleanupFiles(files);
+      console.error('[DdJ /import-e2i-csv] error:', err);
+      return res.status(500).json({ error: 'Erreur lors de l\'import : ' + (err.message || 'inconnue') });
+    }
+  });
+
 module.exports = router;
 // V 2.0.704 — expose loaders for the public TV feed (dj-public.js).
 // They accept orgId=null to skip the org filter (the public route does

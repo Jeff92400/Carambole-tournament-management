@@ -6103,3 +6103,7 @@ router.recomputeAllBonuses = recomputeAllBonuses;
 router.recalculateRankings = recalculateRankings;
 
 module.exports = router;
+// V 2.0.868 — exposed for the E2i → DdJ import endpoint in directeur-jeu.js
+module.exports.parseMatchCSV = parseMatchCSV;
+module.exports.isClassificationPoule = isClassificationPoule;
+module.exports.repairExcelPouleName = repairExcelPouleName;

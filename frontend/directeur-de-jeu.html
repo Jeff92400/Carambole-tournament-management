@@ -331,8 +331,22 @@
         ? `<span class="ddj-stat-params">${comp.distance || '?'} pts / ${comp.reprises || '?'} rep</span>`
         : '';
 
+      // V 2.0.868 — Admin-only "Importer E2i" button for backfilling a
+      // tournament played outside the app from an E2i CSV (Tier 1: poule
+      // scores only). Hidden for DdJ-role / non-admin users.
+      const compId = comp.tournoi_id || comp.id || '';
+      const e2iBtn = `
+        <button class="admin-only ddj-e2i-btn" data-comp-id="${compId}"
+                onclick="event.stopPropagation(); openE2iImportModal('${compId}', '${(comp.nom || '').replace(/'/g, "\\'")}')"
+                title="Pré-remplir les scores depuis un export CSV E2i (admin)"
+                style="background:#6c757d;color:white;border:none;padding:6px 12px;
+                       border-radius:6px;font-size:0.85em;font-weight:600;cursor:pointer;
+                       margin-top:8px;">
+          📥 Importer E2i
+        </button>`;
+
       return `
-        <div class="ddj-comp-card ${statusClass}" data-comp-id="${comp.tournoi_id || comp.id || ''}">
+        <div class="ddj-comp-card ${statusClass}" data-comp-id="${compId}">
           <div class="ddj-card-header">
             <span class="ddj-card-mode">${comp.mode || ''} ${comp.categorie || ''}</span>
             <span class="ddj-status-badge ${badgeClass}">${badgeLabel}</span>
@@ -347,9 +361,128 @@
             ${forfaitHtml}
             ${paramsHtml}
           </div>
+          ${e2iBtn}
         </div>
       `;
     }
+
+    // V 2.0.868 — E2i import modal
+    function openE2iImportModal(compId, nom) {
+      // Build modal on first open
+      let modal = document.getElementById('e2iImportModal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'e2iImportModal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;';
+        modal.innerHTML = `
+          <div style="background:white;border-radius:14px;padding:24px 28px;max-width:640px;width:calc(100% - 40px);max-height:90vh;overflow-y:auto;">
+            <h3 id="e2iModalTitle" style="margin:0 0 12px 0;color:#1F4788;">📥 Importer un CSV E2i vers le DdJ</h3>
+            <p id="e2iModalSubtitle" style="margin:0 0 14px;color:#666;font-size:0.92em;"></p>
+
+            <div style="background:#fff3cd;border-left:3px solid #ffc107;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:0.88em;color:#856404;">
+              <strong>⚠️ Action administrateur</strong> — Cet outil pré-remplit les scores de poule du DdJ depuis un export E2i.
+              <strong>Tier 1 actuel :</strong> seuls les matchs de poule sont importés. Le bracket et la consolante restent à saisir manuellement (Tier 2/3 à venir).
+            </div>
+
+            <label style="display:block;font-weight:600;margin-bottom:6px;">Fichier CSV E2i (matchs)</label>
+            <input type="file" id="e2iFileInput" accept=".csv" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;margin-bottom:14px;">
+
+            <div id="e2iPreviewArea" style="display:none;background:#f8f9fa;border-radius:8px;padding:14px;margin-bottom:14px;font-size:0.9em;"></div>
+
+            <div id="e2iErrorArea" style="display:none;background:#f8d7da;color:#721c24;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:0.9em;"></div>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+              <button onclick="closeE2iModal()" style="padding:10px 18px;background:#6c757d;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;">Annuler</button>
+              <button id="e2iPreviewBtn" onclick="runE2iPreview()" style="padding:10px 18px;background:#1F4788;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer;">🔍 Aperçu</button>
+              <button id="e2iApplyBtn" onclick="runE2iApply()" disabled style="padding:10px 18px;background:#28a745;color:white;border:none;border-radius:6px;font-weight:700;cursor:pointer;opacity:0.5;">✅ Importer</button>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeE2iModal(); });
+      }
+      modal.dataset.compId = compId;
+      document.getElementById('e2iModalTitle').textContent = '📥 Importer un CSV E2i vers le DdJ';
+      document.getElementById('e2iModalSubtitle').textContent = `Tournoi : ${nom || 'compId ' + compId}`;
+      document.getElementById('e2iPreviewArea').style.display = 'none';
+      document.getElementById('e2iErrorArea').style.display = 'none';
+      document.getElementById('e2iApplyBtn').disabled = true;
+      document.getElementById('e2iApplyBtn').style.opacity = '0.5';
+      document.getElementById('e2iFileInput').value = '';
+      modal.style.display = 'flex';
+    }
+
+    function closeE2iModal() {
+      const m = document.getElementById('e2iImportModal');
+      if (m) m.style.display = 'none';
+    }
+    window.openE2iImportModal = openE2iImportModal;
+    window.closeE2iModal = closeE2iModal;
+
+    async function _e2iCall(mode) {
+      const modal = document.getElementById('e2iImportModal');
+      const compId = modal.dataset.compId;
+      const fileInput = document.getElementById('e2iFileInput');
+      const errArea = document.getElementById('e2iErrorArea');
+      errArea.style.display = 'none';
+
+      if (!fileInput.files || fileInput.files.length === 0) {
+        errArea.textContent = 'Veuillez sélectionner un fichier CSV.';
+        errArea.style.display = 'block';
+        return null;
+      }
+      const fd = new FormData();
+      fd.append('files', fileInput.files[0]);
+      fd.append('mode', mode);
+      const tk = sessionStorage.getItem('token');
+      const resp = await fetch(`${API_URL}/directeur-jeu/competitions/${compId}/import-e2i-csv`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${tk}` }, body: fd
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        errArea.textContent = data.error || `Erreur ${resp.status}`;
+        errArea.style.display = 'block';
+        return null;
+      }
+      return data;
+    }
+
+    async function runE2iPreview() {
+      const previewArea = document.getElementById('e2iPreviewArea');
+      const applyBtn = document.getElementById('e2iApplyBtn');
+      previewArea.innerHTML = '<em>Analyse en cours…</em>';
+      previewArea.style.display = 'block';
+      const data = await _e2iCall('preview');
+      if (!data) { previewArea.style.display = 'none'; return; }
+      const s = data.summary;
+      const ts = data.tier_status;
+      const poulesList = s.poules.map(p => `Poule ${p.poule_label}: ${p.player_count} joueurs / ${p.match_count} matchs`).join('<br>');
+      const warnHtml = (data.warnings && data.warnings.length > 0)
+        ? `<div style="margin-top:8px;color:#856404;font-size:0.88em;">⚠️ ${data.warnings.length} avertissement(s) :<br>${data.warnings.slice(0,3).map(w => '• ' + w).join('<br>')}${data.warnings.length > 3 ? '<br>…' : ''}</div>` : '';
+      previewArea.innerHTML = `
+        <strong>📊 Aperçu</strong><br>
+        <strong>${s.total_csv_matches}</strong> matchs dans le CSV — <strong>${s.players}</strong> joueurs uniques<br>
+        <strong style="color:#28a745;">${s.poule_matches}</strong> matchs de poule à importer (${s.poules.length} poule(s))<br>
+        <span style="color:#666;">→ ${ts.bracket === 'no_matches' ? 'aucun match de bracket' : s.bracket_matches + ' matchs bracket (Tier 2, pas encore importé)'}</span><br>
+        <span style="color:#666;">→ ${ts.consolante === 'no_matches' ? 'aucun match de consolante' : s.consolante_matches + ' matchs consolante (Tier 3, pas encore importé)'}</span><br>
+        <span style="color:#666;">→ ${ts.barrage === 'no_matches' ? 'aucun match de barrage' : s.barrage_matches + ' matchs barrage (Tier 4, pas encore importé)'}</span>
+        <hr style="margin:10px 0;border:none;border-top:1px solid #ddd;">
+        ${poulesList}
+        ${warnHtml}
+      `;
+      applyBtn.disabled = false;
+      applyBtn.style.opacity = '1';
+    }
+    window.runE2iPreview = runE2iPreview;
+
+    async function runE2iApply() {
+      if (!confirm('Importer les scores de poule ?\n\nLes données existantes (convocation_poules + ddj_poule_matches) pour ce tournoi seront REMPLACÉES.')) return;
+      const data = await _e2iCall('apply');
+      if (!data) return;
+      alert(`✅ Import réussi !\n${data.applied_counts.players} joueurs et ${data.applied_counts.poule_matches} matchs importés.\n\nRedirection vers la page Matchs poules…`);
+      closeE2iModal();
+      window.location.href = data.redirect_url || `directeur-de-jeu-matchs.html?compId=${document.getElementById('e2iImportModal').dataset.compId}`;
+    }
+    window.runE2iApply = runE2iApply;
 
     // Load competitions
     async function loadCompetitions() {
