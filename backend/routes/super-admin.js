@@ -1659,7 +1659,7 @@ router.post('/organizations/:id/seed-licences', async (req, res) => {
         if (!fl) { missingInFfb++; missing.push(lic); continue; }
 
         const existing = await dbGet(
-          `SELECT id FROM players
+          `SELECT licence FROM players
             WHERE REPLACE(UPPER(licence), ' ', '') = $1
               AND organization_id = $2
             LIMIT 1`,
