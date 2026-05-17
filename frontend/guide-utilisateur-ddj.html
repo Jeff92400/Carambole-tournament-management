@@ -457,6 +457,7 @@
     <li><a href="#tv">L'écran TV pour les joueurs en salle</a></li>
     <li><a href="#flux-complet">Le tournoi complet, du matin au soir + classements</a></li>
     <li><a href="#faq">Questions fréquentes</a></li>
+    <li><a href="#quilles">🎯 Mode Quilles (5Q / 9Q) — règlement LBIF</a></li>
   </ol>
 </nav>
 
@@ -501,6 +502,11 @@
   <div class="step-card">
     <h4>Écran TV façon « Roland-Garros » pour la salle</h4>
     <p>Si vous avez une télévision, vous y affichez l'avancement complet du tournoi (poules + tableau final + matchs de classement). Accès en 2 clics via un QR code, sans taper d'adresse compliquée.</p>
+  </div>
+
+  <div class="step-card" style="border-left:4px solid #c8102e;">
+    <h4>🎯 Support des disciplines Quilles (5Q / 9Q) — règlement LBIF</h4>
+    <p>Le module DdJ gère maintenant les tournois <strong>Jeux avec Quilles</strong> de la LBIF (Ligue de Billard de l'Île de France) : étape <em>Barrage</em> entre les poules et le tableau final, bracket dynamique (8 ou 16 joueurs), points LBIF attribués automatiquement (25/20/15/11/8/5/3/1). Tout est détaillé dans la <a href="#quilles" style="color:#c8102e;font-weight:700;">section 12 « Mode Quilles » →</a>.</p>
   </div>
 
   <div class="tip">
@@ -1427,6 +1433,258 @@
     <p><strong>Oui, tout fonctionne pareil que la version précédente.</strong> Les nouveautés ne remplacent rien : elles ajoutent juste des informations supplémentaires (état des tables, arbitre). Si vous voulez les ignorer, vous le pouvez — mais elles sont là pour vous simplifier la vie.</p>
   </div>
 
+</section>
+
+<!-- ============================================================
+     12. MODE QUILLES (5Q / 9Q) — LBIF
+     ============================================================ -->
+<section id="quilles">
+  <h2><span class="step-num" style="background:#c8102e;">12</span>🎯 Mode Quilles (5Q / 9Q) — règlement LBIF</h2>
+
+  <div class="info" style="border-left-color:#c8102e;background:#fff5f5;">
+    <strong>À qui s'adresse cette section :</strong> les CDB qui organisent des tournois de <strong>Jeux avec Quilles (5 Quilles ou 9 Quilles)</strong> sous l'autorité de la <strong>LBIF</strong> (Ligue de Billard de l'Île de France).<br>
+    <span style="font-size:14px;color:#666;">Si votre CDB n'organise que du carambole classique (Libre / Bande / 3 Bandes / Cadre), vous pouvez ignorer cette section.</span>
+  </div>
+
+  <p>L'application gère le règlement LBIF complet : étape <strong>Barrage</strong> entre les poules et le tableau final, bracket dynamique (8 ou 16 joueurs selon le nombre d'inscrits), points LBIF attribués automatiquement selon la position finale (Code Sportif chap. 1.1.1.G pour 5Q / 3.1.G pour 9Q).</p>
+
+  <!-- ─────────── 12.1 What changes vs. carambole ─────────── -->
+  <h3 style="margin-top:32px;">Ce qui change par rapport au carambole</h3>
+
+  <p>Le workflow Quilles ressemble beaucoup au carambole, avec <strong>quatre différences visibles</strong> :</p>
+
+  <div class="step-card">
+    <h4>1. Une étape supplémentaire : le <strong>Barrage</strong></h4>
+    <p>Entre la fin des matchs de poule et le tableau final, une nouvelle étape s'intercale. Le workflow passe ainsi de <strong>6 étapes (carambole)</strong> à <strong>7 étapes (Quilles)</strong> :</p>
+    <p style="text-align:center;font-size:15px;color:#555;margin-top:10px;">
+      Sélection → Pointage → Poules → Matchs poules → <strong style="color:#c8102e;">Barrage</strong> → Tableau final → Récap
+    </p>
+  </div>
+
+  <div class="step-card">
+    <h4>2. Pas de matchs de classement (« consolante »)</h4>
+    <p>Conformément au règlement LBIF (chap. 1.1.3), les perdants du barrage sont <strong>éliminés</strong>. Il n'y a plus de matchs de classement après le tableau final — la journée se termine sur la finale.</p>
+  </div>
+
+  <div class="step-card">
+    <h4>3. Affichage simplifié — pas de moyenne, pas de meilleure série, pas de reprises</h4>
+    <p>Le 5 Quilles et le 9 Quilles sont des disciplines où l'on compte uniquement des <strong>points marqués</strong>. Les colonnes « Reprises », « Moyenne » et « Meilleure série » qui apparaissent dans les écrans carambole sont automatiquement masquées en mode Quilles — on ne saisit et on ne voit que les points et la distance.</p>
+  </div>
+
+  <div class="step-card">
+    <h4>4. Les points LBIF sont attribués automatiquement</h4>
+    <p>Au lieu des points-match du carambole, chaque joueur reçoit un <strong>nombre de points LBIF</strong> selon la position qu'il atteint dans le tournoi. Les valeurs sont fixées par le règlement national (voir le tableau ci-dessous) et calculées automatiquement par l'application — aucune saisie manuelle nécessaire.</p>
+  </div>
+
+  <!-- ─────────── 12.2 The 7-step workflow ─────────── -->
+  <h3 style="margin-top:32px;">Le workflow Quilles en 7 étapes</h3>
+
+  <p>Les 7 points verts en haut de chaque page DdJ vous indiquent où vous en êtes :</p>
+
+  <!-- TODO: insérer capture d'écran [stepper-quilles-7-dots.png]
+       Description : la barre des 7 points dots de l'étape Barrage (DdJ)
+       depuis directeur-de-jeu-barrage.html — montre 4 points done + 1 actif + 2 pending -->
+  <div class="screenshot-frame" style="background:#f8f9fa;border:1px dashed #c8102e;padding:20px;text-align:center;color:#888;font-style:italic;">
+    <p style="margin:0;">[Capture d'écran à insérer — la barre des 7 dots du DdJ Quilles avec « Barrage » comme 5<sup>e</sup> étape]</p>
+  </div>
+
+  <ol style="margin-top:14px;line-height:1.8;">
+    <li><strong>Sélection</strong> — vous choisissez le tournoi 5Q / 9Q à gérer</li>
+    <li><strong>Pointage</strong> — vous validez la présence des joueurs</li>
+    <li><strong>Poules</strong> — l'application crée les poules (3 joueurs en général) + les <em>qualifiés d'office</em></li>
+    <li><strong>Matchs poules</strong> — vous saisissez les scores des matchs de poule</li>
+    <li style="color:#c8102e;font-weight:700;">Barrage — étape spécifique LBIF (voir ci-dessous)</li>
+    <li><strong>Tableau final</strong> — bracket dynamique avec 8 ou 16 joueurs</li>
+    <li><strong>Récap</strong> — récapitulatif avec le classement LBIF par points</li>
+  </ol>
+
+  <!-- ─────────── 12.3 The Barrage step ─────────── -->
+  <h3 style="margin-top:32px;">L'étape Barrage — qui joue, qui est exempt</h3>
+
+  <p>Une fois tous les matchs de poule terminés, l'application :</p>
+
+  <ol style="line-height:1.7;">
+    <li>Prend les <strong>2 premiers de chaque poule</strong> (les qualifiés du tour de poules)</li>
+    <li>Les <strong>reclasse en serpentin</strong> (par points-match décroissants, puis points marqués, puis ordre alphabétique des licences pour départager)</li>
+    <li>Sépare en deux groupes selon le règlement LBIF :</li>
+  </ol>
+
+  <div class="step-card" style="border-left:4px solid #16a085;">
+    <h4>⏭️ Les <strong>EXEMPTS</strong> — vont direct au tableau final</h4>
+    <p>Les joueurs en tête du reclassement serpentin sautent le barrage. Leur nombre dépend du nombre d'inscrits (voir la matrice LBIF dans la section « Données de référence → 🎯 Quilles LBIF »).</p>
+    <p style="font-size:14px;color:#666;"><em>Exemple — 20 joueurs : 0 exempt, 12 barragistes, 2 qualifiés d'office. Tournoi à 14 joueurs : 4 exempts, 4 barragistes, 2 qualifiés d'office.</em></p>
+  </div>
+
+  <div class="step-card" style="border-left:4px solid #c8102e;">
+    <h4>⚔️ Les <strong>BARRAGISTES</strong> — jouent une élimination directe</h4>
+    <p>Les autres qualifiés des poules s'affrontent en cross-pair selon le serpentin :</p>
+    <ul style="margin-top:6px;">
+      <li>Match 1 : 1<sup>er</sup> contre 8<sup>e</sup></li>
+      <li>Match 2 : 2<sup>e</sup> contre 7<sup>e</sup></li>
+      <li>Match 3 : 3<sup>e</sup> contre 6<sup>e</sup></li>
+      <li>Match 4 : 4<sup>e</sup> contre 5<sup>e</sup></li>
+    </ul>
+    <p><strong>Les vainqueurs rejoignent le tableau final.</strong> <strong style="color:#c8102e;">Les perdants sont éliminés du tournoi</strong> (et reçoivent 5 points LBIF au titre du barrage).</p>
+  </div>
+
+  <div class="tip">
+    <strong>Exception LBIF :</strong> pour les tournois à 12, 23 ou 24 inscrits, il n'y a pas de barrage — tous les qualifiés des poules vont direct au tableau final. L'application gère cette exception automatiquement et masque l'étape Barrage le cas échéant.
+  </div>
+
+  <!-- TODO: insérer capture d'écran [barrage-page.png]
+       Description : la page directeur-de-jeu-barrage.html montrant
+       les Exemptés, les Qualifiés d'office et les 4 matchs de barrage -->
+  <div class="screenshot-frame" style="background:#f8f9fa;border:1px dashed #c8102e;padding:20px;text-align:center;color:#888;font-style:italic;margin-top:14px;">
+    <p style="margin:0;">[Capture d'écran à insérer — la page Barrage avec les cartes Exemptés / Qualifiés d'office / Matchs de barrage]</p>
+  </div>
+
+  <!-- ─────────── 12.4 The dynamic bracket ─────────── -->
+  <h3 style="margin-top:32px;">Le bracket dynamique — 8 ou 16 joueurs</h3>
+
+  <p>Contrairement au carambole où le tableau final est toujours de 4 joueurs (2 demis + finale + petite finale), le tableau final Quilles est <strong>dynamique</strong> selon le nombre d'inscrits :</p>
+
+  <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+    <thead style="background:#f1f3f5;">
+      <tr>
+        <th style="padding:8px;text-align:left;border-bottom:2px solid #c8102e;">Nombre d'inscrits</th>
+        <th style="padding:8px;text-align:left;border-bottom:2px solid #c8102e;">Taille du bracket</th>
+        <th style="padding:8px;text-align:left;border-bottom:2px solid #c8102e;">Phases jouées</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #eee;">12 à 24 joueurs</td>
+        <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Bracket 8</strong></td>
+        <td style="padding:8px;border-bottom:1px solid #eee;">4 quarts → 2 demis → Finale + Petite finale</td>
+      </tr>
+      <tr>
+        <td style="padding:8px;">25 à 46 joueurs</td>
+        <td style="padding:8px;"><strong>Bracket 16</strong></td>
+        <td style="padding:8px;">8 huitièmes → 4 quarts → 2 demis → Finale + Petite finale</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:14px;">Le seeding suit le standard tennis (cross-pair) pour garder les têtes de série dans des moitiés de tableau opposées :</p>
+  <ul>
+    <li><strong>Bracket 8 :</strong> Quart 1 = seed 1 vs 8 / Quart 2 = seed 4 vs 5 / Quart 3 = seed 3 vs 6 / Quart 4 = seed 2 vs 7</li>
+    <li><strong>Bracket 16 :</strong> 8 paires similaires (1v16, 8v9, 5v12, 4v13, 3v14, 6v11, 7v10, 2v15)</li>
+  </ul>
+
+  <!-- TODO: insérer capture d'écran [bracket-quilles.png]
+       Description : la page directeur-de-jeu-bracket.html en mode Quilles
+       montrant les 8 qualifiés (exempts / barrage winners / direct qualifs)
+       + les cartes QF1-QF4 -->
+  <div class="screenshot-frame" style="background:#f8f9fa;border:1px dashed #c8102e;padding:20px;text-align:center;color:#888;font-style:italic;margin-top:14px;">
+    <p style="margin:0;">[Capture d'écran à insérer — la page Tableau final Quilles avec les 8 qualifiés et les 4 quarts de finale]</p>
+  </div>
+
+  <!-- ─────────── 12.5 Qualifiés d'office ─────────── -->
+  <h3 style="margin-top:32px;">Les qualifiés d'office</h3>
+
+  <p>Certains joueurs n'ont pas à jouer les poules — ils sont <strong>qualifiés d'office</strong> et vont direct au tableau final. C'est typiquement le cas pour :</p>
+  <ul>
+    <li>Le tenant du titre du tournoi précédent</li>
+    <li>Les joueurs qualifiés via une compétition supérieure</li>
+    <li>D'autres cas prévus par le règlement LBIF</li>
+  </ul>
+
+  <p>Vous les ajoutez lors de l'étape <strong>Poules</strong>, dans la zone dédiée « 🎯 Qualifiés d'office » au-dessus des poules normales. L'application les stocke avec <code>poule_number = 0</code> (pour les distinguer des joueurs de poule), et leur réserve les derniers sièges du bracket (seeds 7-8 dans un bracket à 8).</p>
+
+  <div class="tip">
+    <strong>Affichage :</strong> dans le classement LBIF du récapitulatif, les qualifiés d'office apparaissent avec la mention <strong style="color:#c8102e;">🎯 Qualifié d'office</strong> dans la colonne « Poule » au lieu d'un numéro de poule.
+  </div>
+
+  <!-- ─────────── 12.6 LBIF points ─────────── -->
+  <h3 style="margin-top:32px;">Les points LBIF (Code Sportif chap. 1.1.1.G / 3.1.G)</h3>
+
+  <p>À l'issue du tournoi, chaque joueur reçoit un nombre de points LBIF en fonction de sa position finale. Les valeurs sont <strong>identiques pour le 5Q et le 9Q</strong> :</p>
+
+  <table style="width:100%;border-collapse:collapse;margin-top:10px;max-width:520px;">
+    <thead style="background:#fff5f5;">
+      <tr>
+        <th style="padding:8px;text-align:left;border-bottom:2px solid #c8102e;">Position dans le tournoi</th>
+        <th style="padding:8px;text-align:right;border-bottom:2px solid #c8102e;">Points LBIF</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">🥇 Vainqueur</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #eee;font-weight:700;color:#c8102e;">25</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">🥈 Finaliste</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #eee;font-weight:700;color:#c8102e;">20</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">🥉 1/2 finaliste (perdant de demi-finale)</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #eee;font-weight:700;color:#c8102e;">15</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">Perdant de quart de finale</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #eee;font-weight:700;color:#c8102e;">11</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">Perdant de 1/8 de finale (bracket 16 uniquement)</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #eee;font-weight:700;color:#c8102e;">8</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">Perdant du barrage</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #eee;font-weight:700;color:#c8102e;">5</td></tr>
+      <tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">3<sup>e</sup> de poule avec 1 victoire</td><td style="padding:6px 8px;text-align:right;border-bottom:1px solid #eee;font-weight:700;color:#c8102e;">3</td></tr>
+      <tr><td style="padding:6px 8px;">3<sup>e</sup> de poule avec 0 victoire</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:#c8102e;">1</td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:14px;">Ces valeurs sont stockées dans la base de données et peuvent théoriquement être ajustées par un administrateur — mais en pratique, elles ne changent pas (règlement national LBIF).</p>
+
+  <!-- TODO: insérer capture d'écran [classement-lbif-recap.png]
+       Description : la section "Classement LBIF (points attribués)" du
+       récapitulatif, montrant les 17 joueurs avec leur position et leurs points -->
+  <div class="screenshot-frame" style="background:#f8f9fa;border:1px dashed #c8102e;padding:20px;text-align:center;color:#888;font-style:italic;margin-top:14px;">
+    <p style="margin:0;">[Capture d'écran à insérer — la section « Classement LBIF (points attribués) » du récapitulatif]</p>
+  </div>
+
+  <!-- ─────────── 12.7 Distance per phase ─────────── -->
+  <h3 style="margin-top:32px;">Distance variable selon la phase</h3>
+
+  <p>En LBIF, la distance d'un match (le nombre de points à atteindre pour gagner) peut varier selon la phase du tournoi. Par exemple, les matchs de qualification peuvent se jouer à 60 points alors que la finale se joue à 100 points.</p>
+
+  <p>Ces valeurs sont configurées dans la <strong>matrice de distances Quilles</strong>, accessible via <strong>Données de référence → 🎯 Quilles LBIF → Matrice des distances</strong>. La matrice définit la distance pour chaque combinaison (nombre de tables × nombre de poules × phase).</p>
+
+  <p>L'application <strong>résout automatiquement</strong> la bonne distance pour chaque match en fonction de la phase courante. Vous n'avez rien à saisir — la distance est affichée dans une bande jaune en haut de chaque carte de match :</p>
+
+  <p style="background:linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);border-left:3px solid #c8102e;padding:8px 12px;border-radius:4px;font-size:14px;color:#8b0000;font-weight:600;display:inline-block;">
+    🎯 Distance Quilles : 100 pts (match terminé quand le vainqueur atteint ce score)
+  </p>
+
+  <!-- ─────────── 12.8 Recap + season ranking ─────────── -->
+  <h3 style="margin-top:32px;">Récapitulatif et classement saison</h3>
+
+  <p>Une fois le tournoi terminé, le récapitulatif Quilles présente :</p>
+
+  <div class="step-card">
+    <h4>🏆 Classement LBIF (points attribués)</h4>
+    <p>Tableau de tous les participants avec leur position finale, leur poule d'origine (ou « Qualifié d'office »), et leurs points LBIF. Les colonnes carambole (moyenne, série, bonus) sont masquées.</p>
+  </div>
+
+  <div class="step-card">
+    <h4>📋 Poules et matchs (vue allégée)</h4>
+    <p>Les tableaux des poules et des matchs sont affichés sans les colonnes Reprises / Moyenne / Série. Seuls les points marqués et les points-match (PM) restent visibles.</p>
+  </div>
+
+  <div class="step-card">
+    <h4>🏆 Tableau final (vue allégée)</h4>
+    <p>Les cartes des matchs du bracket affichent uniquement le score, sans reprises ni moyenne. Les phases Quilles (1/8, 1/4, 1/2, Finale, Petite finale) sont nommées correctement.</p>
+  </div>
+
+  <div class="info" style="border-left-color:#c8102e;background:#fff5f5;">
+    <strong>Validation et classement saison :</strong> quand vous cliquez sur <strong>« Valider les résultats »</strong>, l'application enregistre les points LBIF de chaque participant dans le classement saison. Sur la page <strong>Classements</strong>, sélectionnez la catégorie <code>5Q OPEN</code> (ou <code>9Q OPEN</code>) pour voir le cumul des points LBIF sur les 3 tournois de la saison. Les colonnes carambole y sont également masquées.
+  </div>
+
+  <!-- TODO: insérer capture d'écran [classement-saison-quilles.png]
+       Description : la page rankings.html filtrée sur 5Q OPEN
+       montrant les colonnes T1 / T2 / T3 / Total LBIF -->
+  <div class="screenshot-frame" style="background:#f8f9fa;border:1px dashed #c8102e;padding:20px;text-align:center;color:#888;font-style:italic;margin-top:14px;">
+    <p style="margin:0;">[Capture d'écran à insérer — le classement saison Quilles avec les colonnes T1 / T2 / T3 / Total LBIF]</p>
+  </div>
+
+  <!-- ─────────── 12.9 Wrap-up ─────────── -->
+  <h3 style="margin-top:32px;">En résumé</h3>
+
+  <ul style="line-height:1.8;">
+    <li>Le mode Quilles ajoute <strong>une étape Barrage</strong> et utilise un <strong>bracket dynamique 8 ou 16</strong> joueurs.</li>
+    <li>Tous les calculs (composition du barrage, seeding du bracket, distance par phase, points LBIF) sont <strong>automatiques</strong>.</li>
+    <li>Les colonnes carambole (moyenne, série, reprises, bonus) sont <strong>masquées partout</strong> pour ne pas encombrer l'affichage.</li>
+    <li>Le règlement LBIF complet (chap. 1.1.1 à 1.1.3) est intégré nativement — aucune saisie manuelle de points LBIF n'est requise.</li>
+  </ul>
+
+  <div class="tip" style="border-color:#c8102e;background:#fff5f5;">
+    <strong>Pour aller plus loin :</strong> le document de référence complet est le <em>Code Sportif LBIF Jeux avec Quilles 2025-2026</em> (chap. 1.1.1.G pour le 5Q et 3.1.G pour le 9Q). En cas de doute sur une règle, contactez la commission LBIF.
+  </div>
 </section>
 
 <!-- ============================================================

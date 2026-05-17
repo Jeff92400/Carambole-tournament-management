@@ -2156,3 +2156,18 @@ Les joueurs peuvent déclarer leur indisponibilité pour une compétition via l'
 **Astuce : **Pour des captures de bonne qualité, utilisez la résolution de votre écran standard (pas de zoom). Largeur recommandée : 1200-1400px. Format PNG recommandé. **Activation des images : **Une fois les captures placées dans le dossier `screenshots/ `, ouvrez ce fichier HTML et pour chaque placeholder, décommentez la ligne `<img src="screenshots/XX-nom.png"> `. Le placeholder gris sera alors remplacé par la vraie capture. Document de référence pour l'Application de Gestion des Tournois — Version 2.0.200
 
 JR ©
+---
+
+## Mise à jour V 2.0.864 — Support Quilles LBIF
+
+Le guide intégré dans l'application (`frontend/guide-utilisateur.html` et `frontend/guide-utilisateur-ddj.html`) a été enrichi pour couvrir les disciplines **5 Quilles / 9 Quilles** de la LBIF :
+
+- Étape **Barrage** entre les poules et le tableau final (7 étapes au lieu de 6)
+- **Bracket dynamique** à 8 (12-24 inscrits) ou 16 joueurs (25-46 inscrits)
+- **Points LBIF** attribués automatiquement selon la position finale (25/20/15/11/8/5/3/1)
+- Pas de matchs de classement (les perdants du barrage sont éliminés)
+- Affichage simplifié : pas de moyenne / meilleure série / reprises pour le Quilles
+
+Voir le **guide intégré (HTML)** pour la documentation complète, en particulier la section 12 du guide DdJ « Mode Quilles (5Q / 9Q) — règlement LBIF ».
+
+Ce fichier `.md` n'a pas été régénéré intégralement à partir du HTML — il reste la version V 2.0.200. La version HTML à jour est la source de vérité (`GUIDE-UTILISATEUR-COMPLET.html`).
