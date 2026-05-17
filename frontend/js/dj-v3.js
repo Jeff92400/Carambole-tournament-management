@@ -1133,6 +1133,10 @@
 
   async function loadTablesStatus() {
     if (!state.session) return;
+    // V 2.0.861 — Skip polling when the tab is hidden (saves battery +
+    // stops the console spam when the laptop goes to sleep / WiFi drops).
+    // The page-visibility listener below restarts polling on focus.
+    if (typeof document !== 'undefined' && document.hidden) return;
     try {
       const r = await authFetch(`/api/directeur-jeu/competitions/${state.tournoiId}/tables-status`);
       if (!r.ok) return;
@@ -1146,7 +1150,16 @@
         const close = d && d.querySelector('.djv3-close');
         if (close) close.addEventListener('click', closeTablesDrawer);
       }
-    } catch (e) { console.error('loadTablesStatus', e); }
+    } catch (e) {
+      // V 2.0.861 — Don't log network errors (offline / WiFi drop / sleep).
+      // Real bugs in the response handling surface as 4xx/5xx checked above.
+      const msg = (e && e.message) || '';
+      const isTransient = msg.includes('Failed to fetch')
+                       || msg.includes('NetworkError')
+                       || msg.includes('ERR_INTERNET_DISCONNECTED')
+                       || msg.includes('Load failed');
+      if (!isTransient) console.error('loadTablesStatus', e);
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1155,6 +1168,14 @@
   function startPolling() {
     if (state.pollHandle) return;
     state.pollHandle = setInterval(loadTablesStatus, 10000);
+    // V 2.0.861 — One-time visibility listener: refresh immediately when
+    // the user re-focuses the tab, so the badge isn't stale by up to 10s.
+    if (typeof document !== 'undefined' && !state._visListenerAttached) {
+      state._visListenerAttached = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) loadTablesStatus();
+      });
+    }
   }
 
   // -------------------------------------------------------------------------
