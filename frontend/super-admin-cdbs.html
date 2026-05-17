@@ -364,6 +364,7 @@
               <button class="btn-sm btn-primary" onclick="goToDashboard(${org.id}, '${org.slug}')" title="Voir le dashboard">Dashboard</button>
               <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}', {clubs: ${org.club_count || 0}, players: ${org.player_count || 0}, admin: '${(org.admin_username || '-').replace(/'/g, "\\'")}', welcomeSent: ${welcomeSent ? 'true' : 'false'}})" title="Gérer">Gérer</button>
               <button class="btn-sm ${org.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${org.id})" title="${org.is_active ? 'Désactiver' : 'Activer'}">${org.is_active ? 'Désact.' : 'Activer'}</button>
+              <button class="btn-sm btn-outline" onclick="editOrgNames(${org.id}, '${(org.short_name || '').replace(/'/g, "\\'")}', '${(org.name || '').replace(/'/g, "\\'")}')" title="Renommer (nom court et complet)" style="margin-left: 4px;">Renommer</button>
               <button class="btn-sm btn-outline" onclick="renameSlug(${org.id}, '${org.slug}', '${org.short_name.replace(/'/g, "\\'")}')" title="Renommer le slug (URL)" style="margin-left: 4px;">Slug…</button>
               ${org.id !== 1 ? `<button class="btn-sm btn-danger" onclick="deleteOrg(${org.id}, '${org.short_name.replace(/'/g, "\\'")}')" title="Supprimer" style="margin-left: 4px;">Suppr.</button>` : ''}
             </td>
@@ -372,6 +373,38 @@
       } catch (error) {
         console.error('Error loading orgs:', error);
         showToast('Erreur de chargement', 'error');
+      }
+    }
+
+    // ==================== Edit org names (short + full) ====================
+    async function editOrgNames(orgId, currentShort, currentFull) {
+      const newShort = window.prompt(`Nom court (badge, navbar, listes) — actuel : ${currentShort}\n\nNouveau nom court :`, currentShort);
+      if (newShort === null) return;
+      const newFull = window.prompt(`Nom complet (entête, emails) — actuel : ${currentFull}\n\nNouveau nom complet :`, currentFull);
+      if (newFull === null) return;
+      const shortClean = newShort.trim();
+      const fullClean = newFull.trim();
+      if (!shortClean || !fullClean) {
+        showToast('Les deux champs sont requis.', 'error');
+        return;
+      }
+      if (shortClean === currentShort && fullClean === currentFull) return;
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${orgId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ short_name: shortClean, name: fullClean })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data.error || 'Erreur lors du renommage', 'error');
+          return;
+        }
+        showToast(`Nom mis à jour : ${shortClean}`);
+        loadOrganizations();
+      } catch (error) {
+        console.error('Error renaming org:', error);
+        showToast('Erreur réseau', 'error');
       }
     }
 
