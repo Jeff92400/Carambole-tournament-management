@@ -4856,10 +4856,21 @@ router.get('/competitions/:id/recap', authenticateToken, requireDdJ, async (req,
     }
 
     // Overall classement: bracket 1-4 + consolante 5+
-    const overall = [
-      ...((bracketCtx.final_places) || []),
-      ...((consolanteCtx.final_places) || [])
-    ];
+    // V 2.0.865 — Single-poule mode (N < single_poule_threshold) has no
+    // bracket / consolante — the poule classement IS the final standings.
+    // Build overall from the single poule's classement so the recap page
+    // (and the "X joueur(s) seront enregistrés" preview in the validation
+    // modal) shows the correct count instead of 0.
+    const overall = (pouleCtx.mode === 'single_poule')
+      ? (((pouleCtx.poules || [])[0]?.classement) || []).map((row, idx) => ({
+          place: idx + 1,
+          licence: row.licence,
+          name: row.player_name
+        }))
+      : [
+          ...((bracketCtx.final_places) || []),
+          ...((consolanteCtx.final_places) || [])
+        ];
 
     // FFB-style ranking — cumulative match-points/moyenne/série across all
     // phases (poules + bracket + consolante), but ORDERED by phase number
@@ -5694,20 +5705,38 @@ router.post('/competitions/:id/finalize', authenticateToken, requireDdJ, async (
     if (!allPoulesDone) {
       return res.status(409).json({ error: 'Tous les matchs de poule doivent être terminés avant de valider.' });
     }
-    if (!bracketCtx.final_places || bracketCtx.final_places.length === 0) {
-      return res.status(409).json({ error: 'Le tableau final doit être terminé (Finale + Petite finale).' });
-    }
-    // Consolante is required only if there ARE non-qualifiers (size >= 2).
-    if (consolanteCtx.consolante_size >= 2 && !consolanteCtx.final_places) {
-      return res.status(409).json({ error: 'La consolante doit être terminée (matchs de classement).' });
+    // V 2.0.865 — Single-poule tournaments (N < single_poule_threshold, e.g.
+    // 5 inscrits) skip the bracket + consolante entirely. The single poule's
+    // classement IS the final standings, so we only require the poule
+    // matches to be done (checked above). For carambole multi-poule and
+    // Quilles, the bracket + consolante gates still apply.
+    const isSinglePoule = (pouleCtx.mode === 'single_poule');
+    if (!isSinglePoule) {
+      if (!bracketCtx.final_places || bracketCtx.final_places.length === 0) {
+        return res.status(409).json({ error: 'Le tableau final doit être terminé (Finale + Petite finale).' });
+      }
+      // Consolante is required only if there ARE non-qualifiers (size >= 2).
+      if (consolanteCtx.consolante_size >= 2 && !consolanteCtx.final_places) {
+        return res.status(409).json({ error: 'La consolante doit être terminée (matchs de classement).' });
+      }
     }
 
     // ---- Aggregate per-player stats ---------------------------------------
     const t = pouleCtx.tournament;
-    const overallPlaces = [
-      ...(bracketCtx.final_places || []),
-      ...(consolanteCtx.final_places || [])
-    ];
+    // V 2.0.865 — For single-poule mode, derive places from the poule
+    // classement order (1st of classement = place 1, etc.) instead of from
+    // bracket/consolante which are empty. Without this, no player gets a
+    // position assigned and the season ranking can't sort them.
+    const overallPlaces = isSinglePoule
+      ? ((pouleCtx.poules || [])[0]?.classement || []).map((row, idx) => ({
+          place: idx + 1,
+          licence: row.licence,
+          name: row.player_name
+        }))
+      : [
+          ...(bracketCtx.final_places || []),
+          ...(consolanteCtx.final_places || [])
+        ];
     const placeByLicence = new Map();
     overallPlaces.forEach(p => {
       const key = String(p.licence || '').replace(/\s+/g, '');
