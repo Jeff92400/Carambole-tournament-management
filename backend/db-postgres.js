@@ -2577,8 +2577,12 @@ async function initializeDatabase() {
       [20, 6, 2, 12,  0, true,  'quarter',  8, null],
       [21, 7, 0, 12,  2, true,  'quarter',  8, null],
       [22, 7, 1, 14,  0, true,  'quarter',  8, null],
-      [23, 7, 2,  0, 14, false, 'quarter',  8, "Exception : pas de barrage"],
-      [24, 8, 0,  0, 16, false, 'quarter',  8, "Exception : pas de barrage"],
+      // V 2.0.879 — Correction LBIF règlement : 23 et 24 joueurs envoient
+      // les 16 premiers (top 2 de chaque poule + qualifs directs) au
+      // 1/8 finale, pas seulement 8 au 1/4. Le seed initial était basé sur
+      // une lecture erronée de "pas de barrage = petit bracket".
+      [23, 7, 2,  0,  6, false, 'eighth', 16, "Exception : pas de barrage, bracket 16"],
+      [24, 8, 0,  0,  8, false, 'eighth', 16, "Exception : pas de barrage, bracket 16"],
       [25, 8, 1,  2, 14, true,  'eighth',  16, null],
       [26, 8, 2,  4, 12, true,  'eighth',  16, null],
       [27, 9, 0,  4, 14, true,  'eighth',  16, null],
@@ -2634,6 +2638,21 @@ async function initializeDatabase() {
         [nb_p, nbg, neb]
       );
     }
+
+    // V 2.0.879 — Force-correct rows 23 and 24 in prod. The original seed
+    // had bracket_size=8 / bracket_start='quarter' which doesn't match LBIF
+    // règlement (top 2 of each poule + direct qualifs → 16 in bracket).
+    // INSERT ON CONFLICT DO NOTHING above won't touch existing rows, so
+    // this explicit UPDATE is required for already-deployed environments.
+    await client.query(`
+      UPDATE quilles_bracket_configs
+         SET bracket_start = 'eighth',
+             bracket_size = 16,
+             nb_exempts_barrage = CASE nb_players WHEN 23 THEN 6 WHEN 24 THEN 8 END,
+             notes = 'Exception : pas de barrage, bracket 16'
+       WHERE nb_players IN (23, 24)
+         AND (bracket_size <> 16 OR bracket_start <> 'eighth')
+    `);
 
     // V 2.0.783 — Reference table for Quilles tournament types
     // (régional / qualif_n1 / finale_ligue). Replaces the hardcoded
