@@ -1947,23 +1947,17 @@
       const date = card.dataset.date;
       isFinale = card.dataset.isFinale === 'true';
 
-      // V 2.0.792 — Sprint 2 D.2: Quilles tournaments bypass this admin
-      // convocation builder because they have no FFB category to match
-      // against (mode + 'OPEN'). LBIF tournaments are managed directly via
-      // the Directeur de Jeu workflow on the day of the tournament; pre-
-      // convocations follow a separate (simpler) flow that doesn't pivot
-      // on category.
+      // V 2.0.878 — Quilles support in the convocation builder (LBIF).
+      // The original V 2.0.792 block prevented Quilles tournaments from
+      // entering this flow because they had no FFB category to match. We now
+      // allow them through provided a matching category exists in the org's
+      // categories table (e.g. "5 Quilles N1"). The downstream lookup still
+      // requires the tournament's `categorie` field to resolve — if it
+      // doesn't, the user gets a clearer error later instead of being
+      // blocked upfront.
       const modeUpper = (mode || '').toUpperCase();
       const isQuilles = modeUpper === '5Q' || modeUpper === '9Q'
                      || modeUpper === '5 QUILLES' || modeUpper === '9 QUILLES';
-      if (isQuilles) {
-        alert(
-          `Ce tournoi ${mode} est géré directement via le Directeur de Jeu le jour du tournoi.\n\n` +
-          `Les convocations Quilles seront ajoutées dans une étape ultérieure du module Quilles. ` +
-          `Pour l'instant, accédez au DdJ depuis le menu Compétitions → Directeur de Jeu.`
-        );
-        return;
-      }
 
       // Find matching category using mode_mapping logic
       // We need to match the IONOS mode to our internal game_type
@@ -1977,7 +1971,14 @@
         'BANDE': 'BANDE',
         '1BANDE': 'BANDE',
         '1 BANDE': 'BANDE',
-        'CADRE': 'CADRE'
+        'CADRE': 'CADRE',
+        // V 2.0.878 — Quilles modes (LBIF)
+        '5QUILLES': '5 QUILLES',
+        '5 QUILLES': '5 QUILLES',
+        '5Q': '5 QUILLES',
+        '9QUILLES': '9 QUILLES',
+        '9 QUILLES': '9 QUILLES',
+        '9Q': '9 QUILLES'
       };
 
       // Mapping from IONOS levels to internal levels
