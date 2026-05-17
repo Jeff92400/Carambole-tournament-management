@@ -375,14 +375,21 @@
         </div>
       ` : '';
 
+      // V 2.0.847 — Sprint 2 LBIF Phase 6C: compute isQuilles once, then pass
+      // to each renderer so they can drop the irrelevant Rep/Série/Moy
+      // columns and we can hide the FFB + Consolante sections (replaced by
+      // the new LBIF classement section). Carambole layout unchanged.
+      const isQuilles = typeof isQuillesMode === 'function' && isQuillesMode(t.mode);
+
       document.getElementById('mainContent').innerHTML = `
         ${progressBanner}
         ${gpBanner}
-        ${renderPoulesSection(data.poules)}
-        ${renderBracketSection(data.bracket)}
-        ${renderConsolanteSection(data.consolante)}
+        ${renderLbifClassementSection(data.lbif_classement, isQuilles)}
+        ${renderPoulesSection(data.poules, isQuilles)}
+        ${renderBracketSection(data.bracket, isQuilles)}
+        ${isQuilles ? '' : renderConsolanteSection(data.consolante)}
         ${renderOverallSection(data.overall_classement)}
-        ${renderFfbSection(data.ffb_classement)}
+        ${isQuilles ? '' : renderFfbSection(data.ffb_classement)}
         <div class="ddj-action-bar no-print">
           <button class="ddj-btn ddj-btn-secondary" onclick="window.location.href='directeur-de-jeu-classement.html?compId=${compId}'">
             ← Retour au classement
@@ -425,12 +432,21 @@
       `;
     }
 
-    function renderPoulesSection(poules) {
+    function renderPoulesSection(poules, isQuilles) {
       if (!poules || !poules.length) {
         return `<div class="recap-section"><h3>📋 Poules et matchs</h3><div class="recap-empty">Les poules n'ont pas encore été générées.</div></div>`;
       }
       const body = poules.map(p => {
-        const classementRows = (p.classement || []).map((c, i) => `
+        // V 2.0.847 — Quilles: drop Moy. + Série columns (irrelevant for Quilles).
+        const classementRows = (p.classement || []).map((c, i) => isQuilles ? `
+          <tr>
+            <td class="num">${i + 1}</td>
+            <td>${escapeHtml(c.player_name)}</td>
+            <td style="color:#666;font-size:0.85em;">${escapeHtml(c.club || '')}</td>
+            <td class="num">${c.match_points ?? '—'}</td>
+            <td class="num">${c.points_scored ?? '—'}</td>
+          </tr>
+        ` : `
           <tr>
             <td class="num">${i + 1}</td>
             <td>${escapeHtml(c.player_name)}</td>
@@ -440,11 +456,14 @@
             <td class="num">${c.best_serie ?? '—'}</td>
           </tr>
         `).join('');
+        const classementHeaders = isQuilles
+          ? `<th>#</th><th>Joueur</th><th>Club</th><th>PM</th><th title="Total points marqués">Pts</th>`
+          : `<th>#</th><th>Joueur</th><th>Club</th><th>PM</th><th>Moy.</th><th>Série</th>`;
         const classementHtml = classementRows ? `
           <div class="recap-subsection">
             <h4>Classement Poule ${String.fromCharCode(64 + p.number)}</h4>
             <table class="recap-table">
-              <thead><tr><th>#</th><th>Joueur</th><th>Club</th><th>PM</th><th>Moy.</th><th>Série</th></tr></thead>
+              <thead><tr>${classementHeaders}</tr></thead>
               <tbody>${classementRows}</tbody>
             </table>
           </div>
@@ -456,7 +475,21 @@
           const p2w = played && m.p2_points > m.p1_points;
           const rowCls1 = p1w ? 'winner' : (p2w ? 'loser' : '');
           const rowCls2 = p2w ? 'winner' : (p1w ? 'loser' : '');
-          return `
+          // V 2.0.847 — Quilles: drop Rep/Série/Moy columns.
+          return isQuilles ? `
+            <tr class="${rowCls1}">
+              <td class="num">${m.match_number ?? '—'}</td>
+              <td>${escapeHtml(m.p1?.player_name || '')}</td>
+              <td class="num">${m.p1_points ?? '—'}</td>
+              <td class="num">${m.p1_match_points ?? (played ? 0 : '—')}</td>
+            </tr>
+            <tr class="${rowCls2}" style="border-bottom: 2px solid #dee2e6;">
+              <td></td>
+              <td>${escapeHtml(m.p2?.player_name || '')}</td>
+              <td class="num">${m.p2_points ?? '—'}</td>
+              <td class="num">${m.p2_match_points ?? (played ? 0 : '—')}</td>
+            </tr>
+          ` : `
             <tr class="${rowCls1}">
               <td class="num">${m.match_number ?? '—'}</td>
               <td>${escapeHtml(m.p1?.player_name || '')}</td>
@@ -477,11 +510,14 @@
             </tr>
           `;
         }).join('');
+        const matchHeaders = isQuilles
+          ? `<th>Match</th><th>Joueur</th><th>Pts</th><th>PM</th>`
+          : `<th>Match</th><th>Joueur</th><th>Pts</th><th>Rep</th><th>Série</th><th>Moy.</th><th>PM</th>`;
         const matchesHtml = matchRows ? `
           <div class="recap-subsection">
             <h4>Matchs de la poule</h4>
             <table class="recap-table">
-              <thead><tr><th>Match</th><th>Joueur</th><th>Pts</th><th>Rep</th><th>Série</th><th>Moy.</th><th>PM</th></tr></thead>
+              <thead><tr>${matchHeaders}</tr></thead>
               <tbody>${matchRows}</tbody>
             </table>
           </div>
@@ -499,25 +535,43 @@
     }
 
     const BRACKET_PHASE_LABEL = {
+      // V 2.0.847 — Quilles bracket phases added (EIGHTH1-8, QF1-4)
+      EIGHTH1: '1/8 n°1', EIGHTH2: '1/8 n°2', EIGHTH3: '1/8 n°3', EIGHTH4: '1/8 n°4',
+      EIGHTH5: '1/8 n°5', EIGHTH6: '1/8 n°6', EIGHTH7: '1/8 n°7', EIGHTH8: '1/8 n°8',
+      QF1: '1/4 n°1', QF2: '1/4 n°2', QF3: '1/4 n°3', QF4: '1/4 n°4',
       SF1: 'Demi-finale 1',
       SF2: 'Demi-finale 2',
       F: 'Finale',
       PF: 'Petite finale'
     };
 
-    function renderBracketSection(bracket) {
+    function renderBracketSection(bracket, isQuilles) {
       if (!bracket.can_start) {
         return `<div class="recap-section"><h3>🏆 Tableau final</h3><div class="recap-empty">Le tableau final n'a pas encore démarré (poules incomplètes).</div></div>`;
       }
+      // V 2.0.847 — Column count for the "En attente…" rowspan adjusts to the
+      // simplified Quilles layout (1 score column vs 4 for carambole).
+      const colspanWait = isQuilles ? 2 : 5;
       const phaseRows = (bracket.phases || []).map(ph => {
         const label = BRACKET_PHASE_LABEL[ph.phase] || ph.phase;
         if (!ph.can_enter) {
-          return `<tr><td>${label}</td><td colspan="6" style="color:#888;font-style:italic;">En attente du tour précédent</td></tr>`;
+          return `<tr><td>${label}</td><td colspan="${colspanWait}" style="color:#888;font-style:italic;">En attente du tour précédent</td></tr>`;
         }
         const played = ph.is_played;
         const p1w = played && ph.p1_points > ph.p2_points;
         const p2w = played && ph.p2_points > ph.p1_points;
-        return `
+        // V 2.0.847 — Quilles: only Joueur + Pts shown (drop Rep/Série/Moy).
+        return isQuilles ? `
+          <tr class="${p1w?'winner':(p2w?'loser':'')}">
+            <td rowspan="2" style="vertical-align:middle;font-weight:700;">${label}</td>
+            <td>${escapeHtml(ph.p1?.player_name || '?')}</td>
+            <td class="num">${ph.p1_points ?? '—'}</td>
+          </tr>
+          <tr class="${p2w?'winner':(p1w?'loser':'')}" style="border-bottom:2px solid #dee2e6;">
+            <td>${escapeHtml(ph.p2?.player_name || '?')}</td>
+            <td class="num">${ph.p2_points ?? '—'}</td>
+          </tr>
+        ` : `
           <tr class="${p1w?'winner':(p2w?'loser':'')}">
             <td rowspan="2" style="vertical-align:middle;font-weight:700;">${label}</td>
             <td>${escapeHtml(ph.p1?.player_name || '?')}</td>
@@ -535,9 +589,12 @@
           </tr>
         `;
       }).join('');
+      const headers = isQuilles
+        ? `<th>Phase</th><th>Joueur</th><th>Pts</th>`
+        : `<th>Phase</th><th>Joueur</th><th>Pts</th><th>Rep</th><th>Série</th><th>Moy.</th>`;
       const tableHtml = `
         <table class="recap-table">
-          <thead><tr><th>Phase</th><th>Joueur</th><th>Pts</th><th>Rep</th><th>Série</th><th>Moy.</th></tr></thead>
+          <thead><tr>${headers}</tr></thead>
           <tbody>${phaseRows}</tbody>
         </table>
       `;
@@ -620,6 +677,51 @@
         </div>
       ` : '';
       return `<div class="recap-section"><h3>📋 Matchs de classement</h3>${tableHtml}${placesHtml}</div>`;
+    }
+
+    // V 2.0.847 — Sprint 2 LBIF Phase 6C: classement par points LBIF.
+    // Source de vérité : data.lbif_classement (calculé côté backend par
+    // buildLbifClassement, V 2.0.845). Pointage par position selon la table
+    // lbif_points (V 2.0.843), conforme au règlement LBIF chap 1.1.1.G /
+    // 3.1.G. Cette section remplace le "Classement FFB" pour les tournois
+    // Quilles (le FFB classement est masqué — voir render()).
+    function renderLbifClassementSection(lbif, isQuilles) {
+      if (!isQuilles) return '';
+      if (!lbif || !lbif.length) {
+        return `<div class="recap-section"><h3>🏆 Classement LBIF (points attribués)</h3><div class="recap-empty">Le classement sera calculé une fois le tournoi terminé.</div></div>`;
+      }
+      const medal = (rank) => rank === 1 ? '🥇 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : '';
+      const rows = lbif.map(p => `
+        <tr>
+          <td class="num" style="font-weight:700;">${medal(p.rank)}${p.rank}</td>
+          <td>${escapeHtml(p.name || p.licence)}</td>
+          <td style="color:#666;font-size:0.9em;">${escapeHtml(p.club || '')}</td>
+          <td style="font-size:0.9em;color:#666;">${p.poule_number ? 'Poule ' + String.fromCharCode(64 + p.poule_number) : '—'}</td>
+          <td style="font-size:0.9em;">${escapeHtml(p.position_label || p.position || '—')}</td>
+          <td class="num" style="font-weight:800;color:#c8102e;font-size:1.05em;">${p.points}</td>
+        </tr>
+      `).join('');
+      return `
+        <div class="recap-section">
+          <h3>🏆 Classement LBIF (points attribués)</h3>
+          <p style="font-size:0.85em;color:#666;margin:0 0 8px;font-style:italic;">
+            Points attribués par tournoi selon le règlement LBIF (Code Sportif chap. 1.1.1.G pour 5Q / 3.1.G pour 9Q).
+          </p>
+          <table class="recap-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th style="text-align:left;">Joueur</th>
+                <th style="text-align:left;">Club</th>
+                <th style="text-align:left;">Poule</th>
+                <th style="text-align:left;">Position</th>
+                <th>Points LBIF</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
     }
 
     // Classement façon FFB — points match cumulés sur les 3 phases.
