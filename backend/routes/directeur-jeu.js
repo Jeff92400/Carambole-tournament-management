@@ -7129,38 +7129,16 @@ router.post('/competitions/:id/import-e2i-csv',
         playersInserted++;
       }
 
-      // 7c. Wipe & rewrite ddj_poule_matches with scores
-      await new Promise((resolve, reject) => {
-        db.run(`DELETE FROM ddj_poule_matches WHERE tournoi_id = $1`,
-          [tournoiId], (err) => err ? reject(err) : resolve());
-      });
-
-      // Assign match_number sequentially per poule (we don't try to match the
-      // FFB order — the scores are the only thing that matters for the recap).
-      const matchSeq = new Map(); // poule_number → running match_number
-      let matchesInserted = 0;
-      for (const m of pouleMatches) {
-        const pn = m._poule_number;
-        const seq = (matchSeq.get(pn) || 0) + 1;
-        matchSeq.set(pn, seq);
-        await new Promise((resolve, reject) => {
-          db.run(
-            `INSERT INTO ddj_poule_matches
-               (tournoi_id, poule_number, match_number,
-                p1_licence, p2_licence,
-                p1_points, p1_reprises, p1_serie,
-                p2_points, p2_reprises, p2_serie,
-                entered_at, entered_by)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, $12)`,
-            [tournoiId, pn, seq,
-             m.player1_licence, m.player2_licence,
-             m.player1_points || 0, m.player1_reprises || 0, m.player1_serie || 0,
-             m.player2_points || 0, m.player2_reprises || 0, m.player2_serie || 0,
-             req.user.userId || null],
-            (err) => err ? reject(err) : resolve()
-          );
+      // 7c. Clean slate — wipe any prior DdJ scores for this tournament.
+      // The user will enter all scores manually through the normal DdJ flow.
+      const matchesInserted = 0;
+      for (const tbl of ['ddj_poule_matches', 'ddj_bracket_matches',
+                         'ddj_consolante_matches', 'ddj_barrage_matches',
+                         'ddj_bracket_seed_overrides']) {
+        await new Promise((resolve) => {
+          db.run(`DELETE FROM ${tbl} WHERE tournoi_id = $1`,
+            [tournoiId], () => resolve());
         });
-        matchesInserted++;
       }
 
       // 8. Audit log

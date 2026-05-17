@@ -353,7 +353,7 @@
       const e2iBtn = `
         <button class="admin-only ddj-e2i-btn" data-comp-id="${compId}"
                 onclick="event.stopPropagation(); openE2iImportModal('${compId}', '${(comp.nom || '').replace(/'/g, "\\'")}')"
-                title="Pré-remplir les scores depuis un export CSV E2i (admin)"
+                title="Créer les poules (sans scores) depuis un export CSV E2i (admin)"
                 style="background:#6c757d;color:white;border:none;padding:6px 12px;
                        border-radius:6px;font-size:0.85em;font-weight:600;cursor:pointer;
                        margin-top:8px;">
@@ -395,7 +395,7 @@
             <p id="e2iModalSubtitle" style="margin:0 0 14px;color:#666;font-size:0.92em;"></p>
 
             <div style="background:#fff3cd;border-left:3px solid #ffc107;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:0.88em;color:#856404;">
-              <strong>⚠️ Action administrateur</strong> — Cet outil pré-remplit les scores de poule du DdJ depuis un export E2i.
+              <strong>⚠️ Action administrateur</strong> — Cet outil crée la composition des poules (joueurs) dans le DdJ depuis un export E2i. Les scores des matchs restent <strong>vides</strong> et devront être saisis manuellement via le parcours DdJ normal (Pointage → Matchs).
               <strong>Tier 1 actuel :</strong> seuls les matchs de poule sont importés. Le bracket et la consolante restent à saisir manuellement (Tier 2/3 à venir).
             </div>
 
