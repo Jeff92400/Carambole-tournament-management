@@ -55,6 +55,82 @@ function normLicence(l) {
   return String(l || '').replace(/\s+/g, '');
 }
 
+/**
+ * V 2.0.829 — Decide whether a match is truly finished given the latest
+ * score entry and the tournament's game parameters.
+ *
+ * Historically the three score-save endpoints (poule, bracket, consolante)
+ * unconditionally stamped finished_at = NOW() on every save. That made
+ * intermediate score entries flip the match to "finished" — TV screen
+ * showed ✓ and dropped the LIVE badge while play was still going, and
+ * the DdJ entry view said "Match terminé" prematurely.
+ *
+ * New rule (used by all three save endpoints + the cancel endpoint):
+ *   - Both points columns must be non-null (no half-saved row counts).
+ *   - If `gp.distance` is known, a player reaching it ends the match.
+ *   - If `gp.reprises` is known, hitting the cap ends the match.
+ *   - If neither is known (legacy tournaments without game_params),
+ *     fall back to "both points present" so we don't regress.
+ *
+ * The caller passes the result as a boolean parameter; the SQL uses a
+ * CASE so `finished_at` flips back to NULL on any save that no longer
+ * meets the condition (e.g. DdJ corrects a typo back to an intermediate
+ * score). started_at is preserved by COALESCE in all three endpoints.
+ */
+function isMatchTrulyFinished(parsed, gp) {
+  if (parsed.p1_points == null || parsed.p2_points == null) return false;
+  if (gp && gp.distance != null) {
+    if (parsed.p1_points >= gp.distance || parsed.p2_points >= gp.distance) return true;
+  }
+  if (gp && gp.reprises != null) {
+    if ((parsed.p1_reprises != null && parsed.p1_reprises >= gp.reprises) ||
+        (parsed.p2_reprises != null && parsed.p2_reprises >= gp.reprises)) {
+      return true;
+    }
+  }
+  // Backward-compatible fallback: tournament without game_params seeded
+  // (no distance / reprises cap known). Treat "both scores entered" as
+  // finished, same as the historical behavior.
+  if (!gp || (gp.distance == null && gp.reprises == null)) return true;
+  return false;
+}
+
+// V 2.0.829 — One-shot data heal: clears finished_at for any DdJ match
+// row that was wrongly marked finished while having no scores. Fixes the
+// state left behind by the pre-V 2.0.829 unconditional finished_at write.
+// Runs once at module load, idempotent (a future correct save will just
+// overwrite finished_at when truly finished).
+(async function healCorruptFinishedAt() {
+  try {
+    const db = getDb();
+    const tables = ['ddj_poule_matches', 'ddj_bracket_matches', 'ddj_consolante_matches'];
+    for (const tbl of tables) {
+      await new Promise((resolve) => {
+        db.run(
+          `UPDATE ${tbl}
+             SET finished_at = NULL
+           WHERE finished_at IS NOT NULL
+             AND p1_points IS NULL
+             AND p2_points IS NULL`,
+          [],
+          function (err) {
+            if (err) {
+              // Non-fatal — table may not exist on a fresh install, or
+              // permissions may be missing in a dev env. Log and skip.
+              console.warn(`[DdJ heal] ${tbl}: ${err.message}`);
+            } else if (this && this.changes > 0) {
+              console.log(`[DdJ heal] ${tbl}: cleared finished_at on ${this.changes} row(s)`);
+            }
+            resolve();
+          }
+        );
+      });
+    }
+  } catch (e) {
+    console.warn('[DdJ heal] skipped:', e?.message || e);
+  }
+})();
+
 // GET /api/directeur-jeu/competitions
 // Returns tournaments for today + recent days for the DdJ's organization
 router.get('/competitions', authenticateToken, requireDdJ, (req, res) => {
@@ -2000,7 +2076,8 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
             started_at, finished_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                  CURRENT_TIMESTAMP, $15, $16, $17,
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                 CURRENT_TIMESTAMP,
+                 CASE WHEN $18::bool THEN CURRENT_TIMESTAMP ELSE NULL END)
          ON CONFLICT (tournoi_id, poule_number, match_number)
          DO UPDATE SET
            -- V 2.0.700 — preserve the existing table_number when the
@@ -2019,14 +2096,17 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
            referee_name = EXCLUDED.referee_name,
            referee_licence = EXCLUDED.referee_licence,
            started_at = COALESCE(ddj_poule_matches.started_at, CURRENT_TIMESTAMP),
-           finished_at = CURRENT_TIMESTAMP`,
+           -- V 2.0.829 — Conditional finished_at. See isMatchTrulyFinished()
+           -- top of file. Lets intermediate score entries stay "in progress".
+           finished_at = CASE WHEN $18::bool THEN CURRENT_TIMESTAMP ELSE NULL END`,
         [
           tournoiId, pn, mn, tableNumber,
           match.p1_licence, match.p2_licence,
           parsed.p1_points, parsed.p1_reprises, parsed.p1_serie, parsed.p1_points_subis,
           parsed.p2_points, parsed.p2_reprises, parsed.p2_serie, parsed.p2_points_subis,
           req.user.userId || null,
-          refereeName, refereeLicence
+          refereeName, refereeLicence,
+          isMatchTrulyFinished(parsed, gp)
         ],
         (err) => err ? reject(err) : resolve()
       );
@@ -3925,7 +4005,8 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
             started_at, finished_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
                  CURRENT_TIMESTAMP, $14, $15, $16,
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                 CURRENT_TIMESTAMP,
+                 CASE WHEN $17::bool THEN CURRENT_TIMESTAMP ELSE NULL END)
          ON CONFLICT (tournoi_id, phase)
          DO UPDATE SET
            table_number = COALESCE(EXCLUDED.table_number, ddj_bracket_matches.table_number),
@@ -3944,14 +4025,16 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
            referee_name = EXCLUDED.referee_name,
            referee_licence = EXCLUDED.referee_licence,
            started_at = COALESCE(ddj_bracket_matches.started_at, CURRENT_TIMESTAMP),
-           finished_at = CURRENT_TIMESTAMP`,
+           -- V 2.0.829 — Conditional finished_at (see helper top of file).
+           finished_at = CASE WHEN $17::bool THEN CURRENT_TIMESTAMP ELSE NULL END`,
         [
           tournoiId, phase, tableNumber,
           match.p1.licence, match.p2.licence,
           parsed.p1_points, parsed.p1_reprises, parsed.p1_serie, parsed.p1_points_subis,
           parsed.p2_points, parsed.p2_reprises, parsed.p2_serie, parsed.p2_points_subis,
           req.user.userId || null,
-          refereeName, refereeLicence
+          refereeName, refereeLicence,
+          isMatchTrulyFinished(parsed, gp)
         ],
         (err) => err ? reject(err) : resolve()
       );
@@ -4405,7 +4488,8 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
             started_at, finished_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
                  CURRENT_TIMESTAMP, $14, $15, $16,
-                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                 CURRENT_TIMESTAMP,
+                 CASE WHEN $17::bool THEN CURRENT_TIMESTAMP ELSE NULL END)
          ON CONFLICT (tournoi_id, phase) DO UPDATE SET
            table_number = COALESCE(EXCLUDED.table_number, ddj_consolante_matches.table_number),
            p1_licence   = EXCLUDED.p1_licence,
@@ -4423,14 +4507,22 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
            referee_name = EXCLUDED.referee_name,
            referee_licence = EXCLUDED.referee_licence,
            started_at  = COALESCE(ddj_consolante_matches.started_at, CURRENT_TIMESTAMP),
-           finished_at = CURRENT_TIMESTAMP`,
+           -- V 2.0.829 — Conditional finished_at (see helper top of file).
+           finished_at = CASE WHEN $17::bool THEN CURRENT_TIMESTAMP ELSE NULL END`,
         [
           tournoiId, phase, table_number || null,
           target.p1.licence, target.p2.licence,
           p1_points ?? null, p1_reprises ?? null, p1_serie ?? null, p1_points_subis ?? null,
           p2_points ?? null, p2_reprises ?? null, p2_serie ?? null, p2_points_subis ?? null,
           req.user.userId || null,
-          refereeName, refereeLicence
+          refereeName, refereeLicence,
+          isMatchTrulyFinished(
+            {
+              p1_points: p1_points ?? null, p1_reprises: p1_reprises ?? null,
+              p2_points: p2_points ?? null, p2_reprises: p2_reprises ?? null
+            },
+            ctx.game_params || null
+          )
         ],
         (err) => err ? reject(err) : resolve()
       );
@@ -5846,7 +5938,11 @@ router.post('/competitions/:id/poule-matches/cancel', authenticateToken, require
     const result = await new Promise((resolve, reject) => {
       db.run(
         `UPDATE ddj_poule_matches
-         SET started_at = NULL
+         -- V 2.0.829 — clear finished_at too so a stray
+         -- "marked finished without scores" row is fully reset
+         -- when the DdJ cancels the start.
+         SET started_at = NULL,
+             finished_at = NULL
          WHERE tournoi_id = $1
            AND poule_number = $2
            AND match_number = $3
