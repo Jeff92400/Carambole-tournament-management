@@ -1225,6 +1225,60 @@ router.put('/organizations/:id', async (req, res) => {
   }
 });
 
+// PUT /api/super-admin/organizations/:id/slug — Rename org slug.
+// SA-only. Validates format + uniqueness, then updates organizations.slug
+// and refreshes any organization_settings entries that embed the slug
+// (currently: player_app_url). Existing URLs/bookmarks using the old slug
+// will stop working — only use on orgs that have no active users yet, or
+// after coordinating a communication.
+router.put('/organizations/:id/slug', async (req, res) => {
+  const { id } = req.params;
+  const newSlug = (req.body && req.body.slug ? String(req.body.slug) : '').trim().toLowerCase();
+
+  if (!/^[a-z0-9]([a-z0-9-]{1,30}[a-z0-9])?$/.test(newSlug)) {
+    return res.status(400).json({
+      error: 'Slug invalide : 2–32 caractères, alphanum minuscules et tirets uniquement, sans tiret en début/fin.'
+    });
+  }
+
+  try {
+    const org = await dbGet(`SELECT id, slug, short_name FROM organizations WHERE id = $1`, [id]);
+    if (!org) return res.status(404).json({ error: 'Organisation non trouvée' });
+
+    if (org.slug === newSlug) {
+      return res.json({ success: true, message: 'Slug inchangé', slug: newSlug });
+    }
+
+    const conflict = await dbGet(`SELECT id FROM organizations WHERE slug = $1 AND id <> $2`, [newSlug, id]);
+    if (conflict) return res.status(409).json({ error: `Le slug "${newSlug}" est déjà utilisé par une autre organisation.` });
+
+    const oldSlug = org.slug;
+    await dbRun(`UPDATE organizations SET slug = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [newSlug, id]);
+
+    // Refresh player_app_url if it embedded the old slug
+    try {
+      const currentUrl = await appSettings.getOrgSetting(parseInt(id), 'player_app_url');
+      if (currentUrl && oldSlug && currentUrl.includes(`org=${oldSlug}`)) {
+        const refreshed = currentUrl.replace(`org=${oldSlug}`, `org=${newSlug}`);
+        await appSettings.setOrgSetting(parseInt(id), 'player_app_url', refreshed);
+      }
+    } catch (_) { /* non-fatal */ }
+
+    logAdminAction({
+      req,
+      action: ACTION_TYPES.USER_UPDATED || 'user_updated',
+      targetType: 'organization',
+      targetId: id,
+      details: `Slug renommé "${oldSlug}" → "${newSlug}" (${org.short_name})`
+    });
+
+    res.json({ success: true, message: 'Slug mis à jour', old_slug: oldSlug, slug: newSlug });
+  } catch (error) {
+    console.error('Error renaming organization slug:', error);
+    res.status(500).json({ error: 'Erreur lors du renommage du slug' });
+  }
+});
+
 // PUT /api/super-admin/organizations/:id/toggle-active — Activate/deactivate
 router.put('/organizations/:id/toggle-active', async (req, res) => {
   const { id } = req.params;

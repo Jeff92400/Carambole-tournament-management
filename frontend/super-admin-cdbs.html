@@ -364,6 +364,7 @@
               <button class="btn-sm btn-primary" onclick="goToDashboard(${org.id}, '${org.slug}')" title="Voir le dashboard">Dashboard</button>
               <button class="btn-sm btn-outline" onclick="selectOrg(${org.id}, '${org.short_name}', '${org.slug}', {clubs: ${org.club_count || 0}, players: ${org.player_count || 0}, admin: '${(org.admin_username || '-').replace(/'/g, "\\'")}', welcomeSent: ${welcomeSent ? 'true' : 'false'}})" title="Gérer">Gérer</button>
               <button class="btn-sm ${org.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleActive(${org.id})" title="${org.is_active ? 'Désactiver' : 'Activer'}">${org.is_active ? 'Désact.' : 'Activer'}</button>
+              <button class="btn-sm btn-outline" onclick="renameSlug(${org.id}, '${org.slug}', '${org.short_name.replace(/'/g, "\\'")}')" title="Renommer le slug (URL)" style="margin-left: 4px;">Slug…</button>
               ${org.id !== 1 ? `<button class="btn-sm btn-danger" onclick="deleteOrg(${org.id}, '${org.short_name.replace(/'/g, "\\'")}')" title="Supprimer" style="margin-left: 4px;">Suppr.</button>` : ''}
             </td>
           </tr>
@@ -371,6 +372,40 @@
       } catch (error) {
         console.error('Error loading orgs:', error);
         showToast('Erreur de chargement', 'error');
+      }
+    }
+
+    // ==================== Rename org slug ====================
+    async function renameSlug(orgId, currentSlug, shortName) {
+      const newSlug = window.prompt(
+        `Renommer le slug de "${shortName}".\n\nSlug actuel : ${currentSlug}\n\n` +
+        `⚠️ Les anciennes URLs (?org=${currentSlug}), bookmarks, et liens de l'app joueur cesseront de fonctionner. ` +
+        `À n'utiliser que sur une organisation sans utilisateurs actifs.\n\nNouveau slug :`,
+        currentSlug
+      );
+      if (newSlug === null) return;
+      const cleaned = newSlug.trim().toLowerCase();
+      if (!cleaned || cleaned === currentSlug) return;
+      if (!/^[a-z0-9]([a-z0-9-]{1,30}[a-z0-9])?$/.test(cleaned)) {
+        showToast('Slug invalide (2–32 caractères, alphanum minuscules + tirets).', 'error');
+        return;
+      }
+      try {
+        const res = await authFetch(`${API_URL}/super-admin/organizations/${orgId}/slug`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: cleaned })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data.error || 'Erreur lors du renommage', 'error');
+          return;
+        }
+        showToast(`Slug renommé : ${data.old_slug} → ${data.slug}`);
+        loadOrganizations();
+      } catch (error) {
+        console.error('Error renaming slug:', error);
+        showToast('Erreur réseau', 'error');
       }
     }
 
