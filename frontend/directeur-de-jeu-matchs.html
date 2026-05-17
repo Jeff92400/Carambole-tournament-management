@@ -239,6 +239,9 @@
       font-weight: 600;
     }
     .match-status.played { color: #28a745; }
+    /* V 2.0.841 — "Match en cours" badge: amber to read distinct from
+       both "À jouer" (default gray) and "✓ Terminé" (green). */
+    .match-status.in-progress { color: #d97706; font-weight: 600; }
 
     .btn-save {
       padding: 10px 20px;
@@ -1024,10 +1027,16 @@
     function renderMatch(pouleNumber, m) {
       const playedClass = m.is_played ? 'played' : '';
       const tableLabel = m.table_number ? `Table ${m.table_number}` : '';
+      // V 2.0.841 — third state "Match en cours" so the DdJ sees the
+      // match progressing through partial score entries before it's
+      // truly finished (V 2.0.840 separated is_played from "scores
+      // entered"). Triggers on any score input OR on an explicit start.
+      const hasAnyScore = (m.p1_points != null || m.p2_points != null);
+      const inProgress = !m.is_played && (m.started_at || hasAnyScore);
       const statusLabel = m.is_played
         ? (m.outcome === 'draw' ? `⚖️ Match nul` : `✓ Terminé`)
-        : 'À jouer';
-      const statusCls = m.is_played ? 'played' : '';
+        : (inProgress ? `⏱️ Match en cours` : 'À jouer');
+      const statusCls = m.is_played ? 'played' : (inProgress ? 'in-progress' : '');
 
       // Winner/draw shading on score columns
       let col1Class = 'score-col';
