@@ -2060,6 +2060,33 @@ router.put('/competitions/:id/poule-matches', authenticateToken, requireDdJ, asy
       ? parseInt(b.table_number, 10) || null
       : null;
 
+    // V 2.0.842 — Require "meilleure série" before allowing a save that
+    // would finalize the match. Carambole only — Quilles matches have
+    // no série field (Sprint 2 D.3). Intermediate saves (match still
+    // "en cours") are unaffected so the DdJ can keep logging partial
+    // scores throughout play without being blocked.
+    const willFinish = isMatchTrulyFinished(parsed, gp);
+    if (willFinish) {
+      let mode = '';
+      try {
+        const trow = await new Promise((resolve, reject) => {
+          db.get('SELECT mode FROM tournoi_ext WHERE tournoi_id = $1',
+            [tournoiId], (err, row) => err ? reject(err) : resolve(row));
+        });
+        mode = trow ? trow.mode : '';
+      } catch (_) { /* fall through, treat as carambole */ }
+      let isQuilles = false;
+      try {
+        const { isQuillesMode } = require('../utils/quilles-helpers');
+        isQuilles = isQuillesMode(mode);
+      } catch (_) { /* helper unavailable, treat as carambole */ }
+      if (!isQuilles && (parsed.p1_serie == null || parsed.p2_serie == null)) {
+        return res.status(400).json({
+          error: 'Meilleure série obligatoire pour clôturer le match. Renseignez-la pour les deux joueurs (ou enregistrez un score intermédiaire pour l\'instant).'
+        });
+      }
+    }
+
     // V3 referee fields (optional). When the DdJ submits via the V3 form,
     // these are filled. Older callers can omit them and we just store NULL.
     const refereeName = (b.referee_name || '').trim() || null;
@@ -4011,6 +4038,24 @@ router.put('/competitions/:id/bracket', authenticateToken, requireDdJ, async (re
       ? parseInt(b.table_number, 10) || null
       : null;
 
+    // V 2.0.842 — Meilleure série required to finalize (carambole only).
+    // Same guard as the poule save. ctx.tournament holds the mode.
+    {
+      const willFinish = isMatchTrulyFinished(parsed, gp);
+      if (willFinish) {
+        let isQuilles = false;
+        try {
+          const { isQuillesMode } = require('../utils/quilles-helpers');
+          isQuilles = isQuillesMode(ctx.tournament ? ctx.tournament.mode : '');
+        } catch (_) { /* treat as carambole */ }
+        if (!isQuilles && (parsed.p1_serie == null || parsed.p2_serie == null)) {
+          return res.status(400).json({
+            error: 'Meilleure série obligatoire pour clôturer le match. Renseignez-la pour les deux joueurs (ou enregistrez un score intermédiaire pour l\'instant).'
+          });
+        }
+      }
+    }
+
     // V3: optional referee fields + started_at/finished_at lifecycle.
     const refereeName = (b.referee_name || '').trim() || null;
     const refereeLicence = (b.referee_licence || '').trim() || null;
@@ -4503,6 +4548,27 @@ router.put('/competitions/:id/consolante', authenticateToken, requireDdJ, async 
     }
     if (!target.can_enter) {
       return res.status(409).json({ error: 'Les joueurs de cette phase ne sont pas encore connus' });
+    }
+
+    // V 2.0.842 — Meilleure série required to finalize (carambole only).
+    {
+      const parsedForCheck = {
+        p1_points: p1_points ?? null, p1_reprises: p1_reprises ?? null,
+        p2_points: p2_points ?? null, p2_reprises: p2_reprises ?? null
+      };
+      const willFinish = isMatchTrulyFinished(parsedForCheck, ctx.game_params || null);
+      if (willFinish) {
+        let isQuilles = false;
+        try {
+          const { isQuillesMode } = require('../utils/quilles-helpers');
+          isQuilles = isQuillesMode(ctx.tournament ? ctx.tournament.mode : '');
+        } catch (_) { /* treat as carambole */ }
+        if (!isQuilles && (p1_serie == null || p2_serie == null)) {
+          return res.status(400).json({
+            error: 'Meilleure série obligatoire pour clôturer le match. Renseignez-la pour les deux joueurs (ou enregistrez un score intermédiaire pour l\'instant).'
+          });
+        }
+      }
     }
 
     // V3: optional referee fields + started_at/finished_at lifecycle.
