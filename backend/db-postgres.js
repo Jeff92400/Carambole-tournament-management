@@ -3061,6 +3061,63 @@ async function initializeDatabase() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ddj_barrage_matches_tournoi ON ddj_barrage_matches(tournoi_id)`);
 
+    // V 2.0.841 — Sprint 2 LBIF Phase 6A: LBIF points par position de tournoi.
+    // Source de vérité du règlement LBIF (Code Sportif "Jeux avec Quilles"
+    // 2025-2026, chap 1.1.1.G pour le 5Q et chap 3.1.G pour le 9Q — identiques).
+    //
+    // Conception :
+    //   - organization_id NULL  → valeur par défaut plateforme (= règlement LBIF national).
+    //   - organization_id = N   → override per-CDB (rarissime — la table est nationale,
+    //     mais le schéma le permet pour parer à une future divergence).
+    //   - Lookup : on prend d'abord la valeur org-spécifique, fallback NULL.
+    //
+    // Positions reconnues (mêmes clés que LBIF_POINTS_MAP dans
+    // backend/utils/quilles-helpers.js, conservé pour compat tests) :
+    //   1st, 2nd, semi, quarter, eighth, barrage, poule_3rd_1win, poule_3rd_0win
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS lbif_points (
+        id SERIAL PRIMARY KEY,
+        position TEXT NOT NULL,
+        points INTEGER NOT NULL,
+        organization_id INTEGER REFERENCES organizations(id),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(position, organization_id)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_lbif_points_org ON lbif_points(organization_id)`);
+    // Postgres treats NULL ≠ NULL in unique constraints, so the table-level
+    // UNIQUE(position, organization_id) doesn't catch duplicate platform-default
+    // rows (organization_id IS NULL). A partial unique index closes that hole
+    // and lets the seed INSERT … ON CONFLICT below stay idempotent across
+    // redeploys.
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_lbif_points_position_default
+        ON lbif_points (position) WHERE organization_id IS NULL
+    `);
+
+    // Seed platform defaults (organization_id IS NULL). Idempotent — ON CONFLICT
+    // DO NOTHING so an admin override is never overwritten by a redeploy.
+    const lbifPointsSeed = [
+      ['1st',            25, 'Vainqueur du tournoi'],
+      ['2nd',            20, 'Finaliste'],
+      ['semi',           15, '1/2 finaliste (perdant en demi ou en petite finale)'],
+      ['quarter',        11, '1/4 de finale (perdant en quart)'],
+      ['eighth',          8, '1/8 de finale (perdant en huitième)'],
+      ['barrage',         5, 'Éliminé en barrage'],
+      ['poule_3rd_1win',  3, '3e de poule avec au moins 1 victoire'],
+      ['poule_3rd_0win',  1, '3e de poule avec 0 victoire']
+    ];
+    for (const [pos, pts, note] of lbifPointsSeed) {
+      await client.query(
+        `INSERT INTO lbif_points (position, points, organization_id, notes)
+         VALUES ($1, $2, NULL, $3)
+         ON CONFLICT (position) WHERE organization_id IS NULL DO NOTHING`,
+        [pos, pts, note]
+      );
+    }
+
     // V 2.0.799 — Sprint 2 D.5 hotfix: ensure p1_points_subis / p2_points_subis
     // columns exist on the 3 DdJ match tables. The earlier guarded migration
     // at line ~2618 ran BEFORE the CREATE TABLE blocks below, so on a fresh

@@ -391,11 +391,56 @@ const LBIF_POINTS_MAP = {
 /**
  * Returns the LBIF points for a given position in a Quilles tournament.
  *
+ * Synchronous fallback that reads from the hardcoded LBIF_POINTS_MAP. Kept
+ * for tests + as a safety net if the DB lookup ever fails. Production code
+ * paths should prefer getLbifPointsForOrg() below, which honours per-org
+ * overrides stored in the lbif_points table (V 2.0.841).
+ *
  * @param {string} position - one of LBIF_POINTS_MAP keys
  * @returns {number} 0 if position unknown
  */
 function resolveLbifPoints(position) {
   return LBIF_POINTS_MAP[position] || 0;
+}
+
+/**
+ * V 2.0.841 — Async DB-backed lookup of the LBIF points table.
+ *
+ * Reads from the `lbif_points` table (seeded by the startup migration in
+ * db-postgres.js with the LBIF règlement defaults). Org-specific rows
+ * override the platform default (organization_id IS NULL). Falls back to
+ * the in-memory LBIF_POINTS_MAP for any position not present in the DB,
+ * so the function never throws.
+ *
+ * @param {object} db - db-loader
+ * @param {number|null} orgId - organization to check for overrides; null = platform only
+ * @returns {Promise<Object<string, number>>} { '1st': 25, '2nd': 20, ... }
+ */
+async function getLbifPointsForOrg(db, orgId) {
+  try {
+    const rows = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT position, points, organization_id
+           FROM lbif_points
+          WHERE organization_id IS NULL OR organization_id = $1`,
+        [orgId || null],
+        (err, rs) => err ? reject(err) : resolve(rs || [])
+      );
+    });
+    const out = { ...LBIF_POINTS_MAP }; // start with hardcoded safety net
+    // Platform defaults first
+    for (const r of rows) {
+      if (r.organization_id == null) out[r.position] = r.points;
+    }
+    // Org-specific overrides win
+    for (const r of rows) {
+      if (r.organization_id != null) out[r.position] = r.points;
+    }
+    return out;
+  } catch (e) {
+    console.error('[getLbifPointsForOrg] DB lookup failed, using fallback:', e.message);
+    return { ...LBIF_POINTS_MAP };
+  }
 }
 
 /**
@@ -538,6 +583,7 @@ module.exports = {
   // V 2.0.816 — Phase 2 helpers
   getBracketConfig,
   resolveLbifPoints,
+  getLbifPointsForOrg, // V 2.0.841 — DB-backed lookup honouring per-org overrides
   mapPlaceToLbifPosition,
   computeReclassementSerpentin,
   distributeSerpentin,
