@@ -5108,7 +5108,14 @@ const _LBIF_POSITION_LABELS = {
 async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx }) {
   const { getLbifPointsForOrg } = require('../utils/quilles-helpers');
   const pointsMap = await getLbifPointsForOrg(db, orgId);
-  const normLic = (s) => String(s || '').replace(/\s+/g, '');
+  // V 2.0.852 — normLic now strips whitespace AND uppercases. Without the
+  // uppercase, a player whose licence is stored with different casing in
+  // convocation_poules vs ddj_bracket_matches (rare but possible — e.g.
+  // legacy data, manual entry) was silently dropped from the classement
+  // because summary.get(licence) returned undefined. Observed in
+  // production: David BERTRAND vanished from the LBIF classement despite
+  // having lost QF1 (= 11 pts owed).
+  const normLic = (s) => String(s || '').replace(/\s+/g, '').toUpperCase();
 
   // 1. Gather every player who took part (poule players + qualifiés d'office)
   const playerRows = await new Promise((resolve, reject) => {
@@ -5209,12 +5216,41 @@ async function buildLbifClassement(db, orgId, tournoiId, { pouleCtx, bracketCtx 
     })
     .sort((a, b) => phaseDepth(b.phase) - phaseDepth(a.phase));
 
+  // V 2.0.852 — Defensive auto-add: if a bracket participant somehow isn't
+  // in the summary (e.g. licence mismatch between tables, or a stale
+  // convocation_poules row), synthesise a minimal entry from the phase's
+  // player object so they still get their position + points. Without this,
+  // they would silently vanish from the LBIF classement.
+  const ensureInSummary = (normLicKey, sourcePlayer) => {
+    if (summary.has(normLicKey)) return summary.get(normLicKey);
+    if (!normLicKey) return null;
+    const synth = {
+      licence: (sourcePlayer && sourcePlayer.licence) || normLicKey,
+      name: (sourcePlayer && sourcePlayer.player_name) || 'Joueur',
+      club: (sourcePlayer && sourcePlayer.club) || null,
+      poule_number: (sourcePlayer && sourcePlayer.poule_number) || null,
+      is_direct_qualif: false,
+      poule_wins: 0,
+      poule_qualified: false,
+      barrage_played: false,
+      barrage_won: false,
+      bracket_phase_lost: null,
+      bracket_phase_won: null,
+      final_place: null,
+      position: null,
+      points: 0
+    };
+    summary.set(normLicKey, synth);
+    return synth;
+  };
+
   for (const ph of sortedPhases) {
     const family = phaseFamily(ph.phase);
     if (!family) continue;
     const lics = phaseLicences(ph);
     const p1k = normLic(lics.p1), p2k = normLic(lics.p2);
-    const s1 = summary.get(p1k), s2 = summary.get(p2k);
+    const s1 = ensureInSummary(p1k, ph.p1);
+    const s2 = ensureInSummary(p2k, ph.p2);
     // Winner / loser by points
     let winnerSummary = null, loserSummary = null;
     if (ph.p1_points > ph.p2_points) { winnerSummary = s1; loserSummary = s2; }
